@@ -1039,6 +1039,18 @@ td.mono{ font-family: var(--font-mono); font-size:13px; }
               <option value="">All Customers</option>
             </select>
           </div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <label style="margin:0;white-space:nowrap;">Bulk No:</label>
+            <select id="dash-bulk" style="max-width:120px;">
+              <option value="">All Bulks</option>
+            </select>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <label style="margin:0;white-space:nowrap;">Cement (kg):</label>
+            <input type="number" id="dash-cement-min" placeholder="Min" style="max-width:70px;">
+            <span style="margin:0 2px;">-</span>
+            <input type="number" id="dash-cement-max" placeholder="Max" style="max-width:70px;">
+          </div>
           <button id="btn-apply-filters" class="btn btn-primary" onclick="handleApplyFilters()">Apply Filters</button>
           <button class="btn btn-ghost" onclick="clearDashboardFilters()">Clear Filters</button>
         </div>
@@ -2853,16 +2865,20 @@ function renderSchedule(){
 function populateDashboardFilterDropdowns(){
   const gradeSelect = document.getElementById('dash-grade');
   const custSelect = document.getElementById('dash-customer');
+  const bulkSelect = document.getElementById('dash-bulk');
   if(!gradeSelect || !custSelect) return;
 
   const currentGrade = gradeSelect.value;
   const currentCust = custSelect.value;
+  const currentBulk = bulkSelect ? bulkSelect.value : '';
 
   const grades = [...new Set(state.master.map(m => (m.grade || '').trim()).filter(Boolean))].sort();
   const customers = [...new Set(state.master.map(m => (m.customer || '').trim()).filter(Boolean))].sort();
+  const bulks = [...new Set(state.master.map(m => (m.bulkNumber || '').trim()).filter(Boolean))].sort();
 
   gradeSelect.innerHTML = `<option value="">All Grades</option>` + grades.map(g => `<option value="${escapeHtml(g)}" ${g===currentGrade?'selected':''}>${escapeHtml(g)}</option>`).join('');
   custSelect.innerHTML = `<option value="">All Customers</option>` + customers.map(c => `<option value="${escapeHtml(c)}" ${c===currentCust?'selected':''}>${escapeHtml(c)}</option>`).join('');
+  if (bulkSelect) bulkSelect.innerHTML = `<option value="">All Bulks</option>` + bulks.map(b => `<option value="${escapeHtml(b)}" ${b===currentBulk?'selected':''}>${escapeHtml(b)}</option>`).join('');
 }
 
 function clearDashboardFilters(){
@@ -2870,6 +2886,9 @@ function clearDashboardFilters(){
   if(document.getElementById('dash-end')) document.getElementById('dash-end').value = '';
   if(document.getElementById('dash-grade')) document.getElementById('dash-grade').value = '';
   if(document.getElementById('dash-customer')) document.getElementById('dash-customer').value = '';
+  if(document.getElementById('dash-bulk')) document.getElementById('dash-bulk').value = '';
+  if(document.getElementById('dash-cement-min')) document.getElementById('dash-cement-min').value = '';
+  if(document.getElementById('dash-cement-max')) document.getElementById('dash-cement-max').value = '';
   handleApplyFilters();
 }
 
@@ -4017,12 +4036,18 @@ function applyGlobalFilters(rawData) {
   const endVal = document.getElementById('dash-end') ? document.getElementById('dash-end').value : '';
   const gradeVal = document.getElementById('dash-grade') ? document.getElementById('dash-grade').value : '';
   const custVal = document.getElementById('dash-customer') ? document.getElementById('dash-customer').value.trim().toLowerCase() : '';
+  const bulkVal = document.getElementById('dash-bulk') ? document.getElementById('dash-bulk').value : '';
+  const cementMinVal = document.getElementById('dash-cement-min') ? parseFloat(document.getElementById('dash-cement-min').value) : NaN;
+  const cementMaxVal = document.getElementById('dash-cement-max') ? parseFloat(document.getElementById('dash-cement-max').value) : NaN;
 
   let filteredMaster = rawData.master || [];
   if (startVal) filteredMaster = filteredMaster.filter(m => m && m.castingDate >= startVal);
   if (endVal) filteredMaster = filteredMaster.filter(m => m && m.castingDate <= endVal);
   if (gradeVal) filteredMaster = filteredMaster.filter(m => m && m.grade === gradeVal);
   if (custVal) filteredMaster = filteredMaster.filter(m => m && (m.customer || '').toLowerCase().includes(custVal));
+  if (bulkVal) filteredMaster = filteredMaster.filter(m => m && m.bulkNumber === bulkVal);
+  if (!isNaN(cementMinVal)) filteredMaster = filteredMaster.filter(m => m && parseFloat(m.cementContent) >= cementMinVal);
+  if (!isNaN(cementMaxVal)) filteredMaster = filteredMaster.filter(m => m && parseFloat(m.cementContent) <= cementMaxVal);
 
   const filteredTNs = new Set(filteredMaster.map(m => m ? m.trackingNumber : null).filter(Boolean));
   const filteredTests = (rawData.tests || []).filter(t => t && filteredTNs.has(t.trackingNumber));
@@ -4337,7 +4362,7 @@ function renderChartSlump(filteredMaster, filteredTests) {
 function renderChartSiloPerformance(filteredMaster, filteredTests) {
   const canvasId = 'chart-silo-performance';
   try {
-    const targetGrade = document.getElementById('dash-filter-grade') ? document.getElementById('dash-filter-grade').value : '';
+    const targetGrade = document.getElementById('dash-grade') ? document.getElementById('dash-grade').value : '';
     if (!targetGrade) {
       showChartPlaceholder(canvasId, "Please select a specific Concrete Grade (e.g., C25) from the filters above to view Silo/Bulk performance.");
       return;
@@ -4427,7 +4452,7 @@ function renderChartSiloPerformance(filteredMaster, filteredTests) {
 function renderChartSlumpSensitivity(filteredMaster, filteredTests) {
   const canvasId = 'chart-slump-sensitivity';
   try {
-    const targetGrade = document.getElementById('dash-filter-grade') ? document.getElementById('dash-filter-grade').value : '';
+    const targetGrade = document.getElementById('dash-grade') ? document.getElementById('dash-grade').value : '';
     if (!targetGrade) {
       showChartPlaceholder(canvasId, "Please select a specific Concrete Grade (e.g., C25) from the filters to analyze slump sensitivity.");
       return;
