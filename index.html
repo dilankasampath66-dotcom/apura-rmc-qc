@@ -153,13 +153,130 @@ a{ color: var(--slate); text-decoration: none; }
 .main{ flex:1; min-width:0; padding: 28px 36px 60px; max-width:1400px; }
 .view{ display:none; }
 .view.active{ display:block; animation: fadein .25s ease; }
-#view-login{
-  min-height:85vh;
-  align-items:center;
-  justify-content:center;
+#view-login {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background:
+    linear-gradient(135deg, rgba(15,23,42,0.72) 0%, rgba(30,58,100,0.55) 100%),
+    url('assets/login-bg.jpg') center/cover no-repeat;
+  backdrop-filter: none;
+  padding: 20px;
+  box-sizing: border-box;
 }
-#view-login.active{
-  display:flex;
+#view-login.active {
+  display: flex;
+  animation: loginFadeIn 0.5s ease;
+}
+@keyframes loginFadeIn {
+  from { opacity: 0; transform: scale(0.97); }
+  to   { opacity: 1; transform: scale(1); }
+}
+.login-card {
+  background: rgba(255, 255, 255, 0.90);
+  backdrop-filter: blur(18px) saturate(1.4);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+  border: 1px solid rgba(255,255,255,0.55);
+  border-radius: 20px;
+  box-shadow: 0 32px 80px rgba(0,0,0,0.38), 0 2px 0 rgba(255,255,255,0.6) inset;
+  padding: 44px 40px 36px;
+  width: 100%;
+  max-width: 420px;
+  position: relative;
+  overflow: hidden;
+}
+.login-card::before {
+  content: '';
+  position: absolute;
+  top: -60px; right: -60px;
+  width: 180px; height: 180px;
+  background: radial-gradient(circle, rgba(37,99,235,0.18) 0%, transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
+}
+.login-logo-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(135deg, #1e3a5f, #2563eb);
+  color: #fff;
+  border-radius: 50px;
+  padding: 5px 14px 5px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  margin-bottom: 18px;
+}
+.login-logo-badge span.dot {
+  width: 8px; height: 8px;
+  background: #4ade80;
+  border-radius: 50%;
+  display: inline-block;
+  box-shadow: 0 0 6px #4ade80;
+  animation: pulse-dot 2s infinite;
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.6; transform: scale(1.35); }
+}
+.login-title {
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--slate-deep);
+  line-height: 1.2;
+  margin-bottom: 4px;
+}
+.login-subtitle {
+  font-size: 13px;
+  color: var(--ink-soft);
+  margin-bottom: 28px;
+}
+.login-divider {
+  border: none;
+  border-top: 1px solid rgba(0,0,0,0.08);
+  margin: 22px 0;
+}
+.login-footer {
+  text-align: center;
+  font-size: 11px;
+  color: #94a3b8;
+  line-height: 1.6;
+  margin-top: 20px;
+}
+.login-footer strong { color: #64748b; }
+.login-btn-primary {
+  width: 100%;
+  padding: 13px;
+  background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: 0.3px;
+  box-shadow: 0 4px 18px rgba(37,99,235,0.35);
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.login-btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(37,99,235,0.45);
+}
+.login-btn-primary:active { transform: translateY(0); }
+.login-btn-primary:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
+}
+@media(max-width: 480px) {
+  .login-card { padding: 32px 24px 28px; border-radius: 16px; }
+  .login-title { font-size: 22px; }
 }
 @keyframes fadein{ from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:none;} }
 
@@ -664,32 +781,60 @@ td.mono{ font-family: var(--font-mono); font-size:13px; }
 
     <!-- ============ LOGIN VIEW (FULL PAGE SCREEN) ============ -->
     <section class="view active" id="view-login">
-      <div class="card" style="max-width:420px; width:100%; margin:40px auto; padding:32px 28px; box-shadow:var(--shadow);">
-        <div style="text-align:center; margin-bottom:24px;">
-          <div style="font-family:var(--font-display); font-weight:800; font-size:22px; color:var(--slate-deep);">APURA RMC PLANT</div>
-          <div style="font-size:13px; color:var(--ink-soft); margin-top:4px;">Concrete Cube Quality Control System</div>
-          <div style="display:inline-block; margin-top:10px; padding:3px 10px; background:var(--surface-sunk); border-radius:20px; font-size:11px; font-weight:700; color:var(--slate);">BS EN 12390 COMPLIANT</div>
+      <div class="login-card">
+
+        <!-- Brand Badge -->
+        <div style="text-align:center;">
+          <div class="login-logo-badge">
+            <span class="dot"></span> System Active
+          </div>
         </div>
 
-        <div class="field">
-          <label>Username *</label>
-          <input type="text" id="login-username-input" placeholder="Enter username (e.g. admin)" onkeydown="if(event.key==='Enter') login()">
+        <!-- Title -->
+        <div style="text-align:center; margin-bottom:28px;">
+          <div class="login-title">APURA RMC PLANT</div>
+          <div class="login-subtitle">Concrete Cube Quality Control &amp; QA Platform</div>
+          <div style="display:inline-block; padding:3px 12px; background:rgba(37,99,235,0.08); border:1px solid rgba(37,99,235,0.2); border-radius:20px; font-size:10.5px; font-weight:700; color:#2563eb; letter-spacing:0.5px;">BS EN 12390 COMPLIANT</div>
         </div>
 
-        <div class="field">
-          <label>Password *</label>
-          <input type="password" id="login-password-input" placeholder="Enter password (e.g. 123)" onkeydown="if(event.key==='Enter') login()">
+        <hr class="login-divider">
+
+        <!-- Username Field -->
+        <div class="field" style="margin-bottom:14px;">
+          <label style="font-size:12px; font-weight:700; color:#475569; text-transform:uppercase; letter-spacing:0.5px;">Username</label>
+          <input type="text" id="login-username-input"
+            placeholder="Enter your username"
+            onkeydown="if(event.key==='Enter') login()"
+            style="border-radius:9px; border:1.5px solid #e2e8f0; padding:11px 14px; font-size:14px; transition:border-color 0.2s;"
+            onfocus="this.style.borderColor='#2563eb'" onblur="this.style.borderColor='#e2e8f0'">
         </div>
 
-        <div id="login-error-msg" style="color:var(--red); font-size:12.5px; font-weight:600; margin-bottom:14px; display:none;"></div>
-
-        <div class="btn-row" style="margin-top:22px;">
-          <button class="btn btn-primary" style="width:100%; padding:12px;" onclick="login()">Sign In &amp; Start Session</button>
+        <!-- Password Field -->
+        <div class="field" style="margin-bottom:6px;">
+          <label style="font-size:12px; font-weight:700; color:#475569; text-transform:uppercase; letter-spacing:0.5px;">Password</label>
+          <input type="password" id="login-password-input"
+            placeholder="Enter your password"
+            onkeydown="if(event.key==='Enter') login()"
+            style="border-radius:9px; border:1.5px solid #e2e8f0; padding:11px 14px; font-size:14px; transition:border-color 0.2s;"
+            onfocus="this.style.borderColor='#2563eb'" onblur="this.style.borderColor='#e2e8f0'">
         </div>
 
-        <div style="margin-top:20px; font-size:11.5px; color:var(--ink-soft); text-align:center; line-height:1.4;">
-          Default Admin Account: <strong>admin</strong> / <strong>123</strong><br>
-          Role-Based Access Control (RBAC) Active
+        <!-- Error Message -->
+        <div id="login-error-msg"
+          style="display:none; background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.25); color:#dc2626; font-size:12.5px; font-weight:600; padding:9px 12px; border-radius:8px; margin:12px 0;">
+        </div>
+
+        <!-- Sign In Button -->
+        <div style="margin-top:20px;">
+          <button class="login-btn-primary" id="login-submit-btn" onclick="login()">
+            Sign In &amp; Start Session
+          </button>
+        </div>
+
+        <!-- Footer -->
+        <div class="login-footer">
+          <strong>Role-Based Access Control (RBAC) Active</strong><br>
+          Contact your system administrator for access credentials
         </div>
       </div>
     </section>
@@ -1648,25 +1793,54 @@ function isAdmin(){
 }
 
 function login(){
-  const userEl = document.getElementById('login-username-input');
-  const passEl = document.getElementById('login-password-input');
-  const errEl = document.getElementById('login-error-msg');
+  const userEl  = document.getElementById('login-username-input');
+  const passEl  = document.getElementById('login-password-input');
+  const errEl   = document.getElementById('login-error-msg');
+  const btn     = document.getElementById('login-submit-btn');
   if(!userEl || !passEl) return;
 
   const uname = userEl.value.trim();
-  const pass = passEl.value.trim();
+  const pass  = passEl.value.trim();
 
   if(!uname || !pass){
-    if(errEl){ errEl.textContent = 'Please enter both Username and Password.'; errEl.style.display = 'block'; }
+    _loginError(errEl, '⚠ Please enter both Username and Password.');
     return;
   }
 
-  const found = state.users.find(u => u.username.toLowerCase() === uname.toLowerCase() && u.password === pass);
+  // Loading state
+  if(btn){ btn.disabled = true; btn.textContent = 'Signing in…'; }
+  if(errEl) errEl.style.display = 'none';
+
+  const found = state.users.find(u =>
+    u.username.toLowerCase() === uname.toLowerCase() && u.password === pass
+  );
 
   if(!found){
-    if(errEl){ errEl.textContent = 'Invalid username or password. Please try again.'; errEl.style.display = 'block'; }
+    if(btn){ btn.disabled = false; btn.textContent = 'Sign In & Start Session'; }
+    _loginError(errEl, '✕ Invalid username or password. Please try again.');
+    // Shake the card for visual feedback
+    const card = document.querySelector('.login-card');
+    if(card){
+      card.style.animation = 'none';
+      card.style.transform = 'translateX(-8px)';
+      setTimeout(() => { card.style.transform = 'translateX(8px)'; }, 80);
+      setTimeout(() => { card.style.transform = 'none'; card.style.transition = 'transform 0.2s'; }, 160);
+    }
     return;
   }
+
+  // ── TASK 2: Session Initialization — store tenant data in sessionStorage ──
+  const companyId = found.companyId || 'APURA_RMC'; // fallback for legacy accounts
+  if(!companyId){
+    if(btn){ btn.disabled = false; btn.textContent = 'Sign In & Start Session'; }
+    _loginError(errEl, '✕ Account not assigned to a tenant. Contact your administrator.');
+    return;
+  }
+
+  sessionStorage.setItem('companyId',  companyId);
+  sessionStorage.setItem('userRole',   found.role || 'user');
+  sessionStorage.setItem('username',   found.username);
+  sessionStorage.setItem('loggedInAt', new Date().toISOString());
 
   currentUser = found;
   state.currentUser = found.username;
@@ -1675,6 +1849,7 @@ function login(){
   if(errEl) errEl.style.display = 'none';
   userEl.value = '';
   passEl.value = '';
+  if(btn){ btn.disabled = false; btn.textContent = 'Sign In & Start Session'; }
 
   // Auto-fill technician names in forms
   const castSelect = document.getElementById('f-castedBy');
@@ -1682,13 +1857,18 @@ function login(){
   const testSelect = document.getElementById('tt-e-testedby');
   if(testSelect) testSelect.value = found.username;
 
-  logActivity("User Login", "—", found.username, `User ${found.username} (${found.role}) logged in successfully`);
-  toast(`Welcome ${found.username}! Logged in as ${found.role.toUpperCase()}.`);
+  logActivity("User Login", "—", found.username, `User ${found.username} (${found.role}) logged in | Tenant: ${companyId}`);
+  toast(`Welcome back, ${found.username}! Logged in as ${found.role.toUpperCase()}.`);
 
   applyRoleRestrictions();
-  setTimeout(() => {
-    showView('home');
-  }, 60);
+  setTimeout(() => { showView('home'); }, 60);
+}
+
+/** Helper: show a styled error message in the login form */
+function _loginError(errEl, msg) {
+  if(!errEl) return;
+  errEl.textContent = msg;
+  errEl.style.display = 'block';
 }
 
 function logout(){
@@ -5178,5 +5358,6 @@ document.getElementById('f-castingDate').valueAsDate = new Date();
 
 <script src="js/migration.js"></script>
 <script src="js/userManagement.js"></script>
+<script src="js/tenantQuery.js"></script>
 </body>
 </html>
