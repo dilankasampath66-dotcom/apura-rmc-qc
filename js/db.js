@@ -1,7 +1,8 @@
 // js/db.js
 /* =========================================================================
    TOKYO SUPERMIX / APURA RMC PLANT — SALES & QC MANAGEMENT SYSTEM
-   Cloud-First, Local-Cache Database Engine & Firebase Firestore Synchronization
+   Real-Time Firebase Cloud Firestore Synchronization Engine (onSnapshot)
+   (Firebase Firestore is the Single Source of Truth; LocalStorage is Silent Cache)
    ========================================================================= */
 
 const LS_KEY = 'apura_rmc_qc_data_v1';
@@ -21,6 +22,7 @@ export class DatabaseManager {
   constructor() {
     this.db = null;
     this.firebaseActive = false;
+    this.unsubscribeMainState = null;
     this.initFirebase();
     this.setupNetworkListeners();
   }
@@ -45,7 +47,7 @@ export class DatabaseManager {
         });
 
         this.firebaseActive = true;
-        console.log("🔥 Firebase Firestore DatabaseManager initialized (Cloud-First Architecture).");
+        console.log("🔥 Firebase Firestore DatabaseManager initialized with Real-Time Listeners (onSnapshot).");
       } else {
         console.warn("⚠️ Firebase Compat SDK not available globally on window.");
       }
@@ -68,21 +70,86 @@ export class DatabaseManager {
   }
 
   /* =========================================================================
-     1. ON APP LOAD (Read-Only Cloud-First Initialization)
+     1. REAL-TIME SNAPSHOT LISTENERS (onSnapshot - Cross-Browser Synchronization)
      ========================================================================= */
 
   /**
-   * Fetches all live collections directly from Cloud Firestore on application startup.
-   * OVERWRITES browser LocalStorage with fresh Cloud Firestore data.
+   * Subscribes to real-time Cloud Firestore updates via onSnapshot.
+   * Whenever data is added or modified in Chrome, Safari automatically re-renders in real-time.
+   */
+  setupRealtimeListeners() {
+    if (!this.isFirebaseActive()) return;
+
+    if (this.unsubscribeMainState) {
+      try { this.unsubscribeMainState(); } catch (e) {}
+    }
+
+    try {
+      // Real-Time Document Listener on main state
+      this.unsubscribeMainState = this.db.collection("apura_qc_system").doc("main_state")
+        .onSnapshot((docSnap) => {
+          if (docSnap.exists) {
+            const cloudData = docSnap.data();
+            if (cloudData && typeof cloudData === 'object') {
+              window.state = {
+                master: Array.isArray(cloudData.master) ? cloudData.master : [],
+                tests: Array.isArray(cloudData.tests) ? cloudData.tests : [],
+                activities: Array.isArray(cloudData.activities) ? cloudData.activities : [],
+                users: Array.isArray(cloudData.users) ? cloudData.users : (window.state?.users || []),
+                skippedTests: Array.isArray(cloudData.skippedTests) ? cloudData.skippedTests : [],
+                crmVisits: Array.isArray(cloudData.crmVisits) ? cloudData.crmVisits : [],
+                mixGrades: Array.isArray(cloudData.mixGrades) ? cloudData.mixGrades : [],
+                currentUser: window.currentUser
+              };
+
+              // Overwrite LocalStorage cache silently as secondary offline backup
+              localStorage.setItem(LS_KEY, JSON.stringify(window.state));
+              console.log("⚡ Real-time Firestore snapshot received! UI updating automatically across browsers.");
+
+              // Automatically re-render all UI views in real-time!
+              this.renderAllUIViews();
+            }
+          }
+        }, (err) => {
+          console.warn("⚠️ Real-time snapshot listener notice:", err);
+        });
+    } catch (err) {
+      console.warn("⚠️ Failed to initialize real-time snapshot listeners:", err);
+    }
+  }
+
+  /**
+   * Re-renders all active application UI views in real-time.
+   */
+  renderAllUIViews() {
+    if (typeof window.updateSuggestions === 'function') window.updateSuggestions();
+    if (typeof window.renderTestingSidebarList === 'function') window.renderTestingSidebarList();
+    if (typeof window.renderMaster === 'function') window.renderMaster();
+    if (typeof window.renderDashboard === 'function') window.renderDashboard();
+    if (typeof window.renderWarnings === 'function') window.renderWarnings();
+    if (typeof window.renderActivityLog === 'function') window.renderActivityLog();
+    if (typeof window.renderUsers === 'function') window.renderUsers();
+    if (typeof window.renderSchedule === 'function') window.renderSchedule();
+    if (typeof window.generateAIExecutiveInsights === 'function' && window.state) {
+      window.generateAIExecutiveInsights(window.state);
+    }
+  }
+
+  /* =========================================================================
+     2. ON APP LOAD (Read-Only Cloud-First Initialization)
+     ========================================================================= */
+
+  /**
+   * Initializes application state on startup directly from Cloud Firestore.
+   * Attach real-time snapshot listeners so data remains 100% in sync across browsers.
    * STRICT RULE: NEVER pushes LocalStorage data to Firebase on startup!
    */
   async initializeApp() {
-    console.log("☁️ Executing Cloud-First Startup Initialization...");
+    console.log("☁️ Executing Real-Time Cloud-First Startup Initialization...");
     let loadedFromCloud = false;
 
     if (this.isFirebaseActive()) {
       try {
-        // Option A: Primary Document Sync
         const docRef = this.db.collection("apura_qc_system").doc("main_state");
         const snap = await docRef.get();
 
@@ -101,27 +168,6 @@ export class DatabaseManager {
             };
             loadedFromCloud = true;
           }
-        } else {
-          // Option B: Multi-collection read fallback
-          const masterSnap = await this.db.collection("casting_records").get();
-          const testsSnap = await this.db.collection("cube_tests").get();
-          const crmSnap = await this.db.collection("crm_site_visits").get();
-
-          const masterList = [];
-          masterSnap.forEach(d => masterList.push(d.data()));
-
-          const testList = [];
-          testsSnap.forEach(d => testList.push(d.data()));
-
-          const crmList = [];
-          crmSnap.forEach(d => crmList.push(d.data()));
-
-          if (masterList.length || testList.length || crmList.length) {
-            window.state.master = masterList;
-            window.state.tests = testList;
-            window.state.crmVisits = crmList;
-            loadedFromCloud = true;
-          }
         }
       } catch (err) {
         console.warn("⚠️ Cloud Firestore startup fetch error, resorting to local cache:", err);
@@ -129,11 +175,9 @@ export class DatabaseManager {
     }
 
     if (loadedFromCloud) {
-      // Overwrite LocalStorage cache with fresh cloud state
       localStorage.setItem(LS_KEY, JSON.stringify(window.state));
-      console.log("✅ Application State initialized from Cloud Firestore & LocalStorage cache updated.");
+      console.log("✅ Application State initialized from Cloud Firestore.");
     } else {
-      // Offline fallback: load from LocalStorage cache
       const raw = localStorage.getItem(LS_KEY);
       if (raw) {
         try {
@@ -157,15 +201,6 @@ export class DatabaseManager {
       }
     }
 
-    // Default arrays & Admin user verification
-    if (!window.state.master) window.state.master = [];
-    if (!window.state.tests) window.state.tests = [];
-    if (!window.state.activities) window.state.activities = [];
-    if (!window.state.users) window.state.users = [];
-    if (!window.state.skippedTests) window.state.skippedTests = [];
-    if (!window.state.crmVisits) window.state.crmVisits = [];
-    if (!window.state.mixGrades) window.state.mixGrades = [];
-
     if (!window.state.users.some(u => u.username && u.username.toLowerCase() === 'admin')) {
       window.state.users.unshift({ username: 'admin', password: '123', role: 'admin' });
     }
@@ -178,6 +213,9 @@ export class DatabaseManager {
     });
     window.nextTrackingSeq = maxSeq + 1;
 
+    // Attach Real-Time Snapshot Listener for instant multi-browser sync
+    this.setupRealtimeListeners();
+
     // Process any pending offline sync queue
     this.syncOfflineQueue();
 
@@ -185,12 +223,12 @@ export class DatabaseManager {
   }
 
   /* =========================================================================
-     2. ON DATA INPUT / CREATION (Direct Target Document Writes)
+     3. ON DATA INPUT / CREATION (Direct Cloud Writes)
      ========================================================================= */
 
   /**
    * Creates a new document directly in Cloud Firestore.
-   * Updates local state & LocalStorage cache ONLY after successful write or queueing.
+   * Does NOT update local UI manually; onSnapshot listener detects and renders automatically!
    */
   async createDocument(collectionName, docId, data) {
     const cleanData = JSON.parse(JSON.stringify(data));
@@ -199,7 +237,6 @@ export class DatabaseManager {
     if (this.isFirebaseActive() && navigator.onLine !== false) {
       try {
         await this.db.collection(collectionName).doc(docId).set(cleanData);
-        // Also update main document state
         await this.saveMainStateDoc();
         cloudSaved = true;
         console.log(`☁️ Successfully created document in '${collectionName}/${docId}'.`);
@@ -212,18 +249,14 @@ export class DatabaseManager {
       this.enqueueOfflineOp({ type: 'set', collection: collectionName, docId, data: cleanData });
     }
 
-    // Always update LocalStorage cache
     localStorage.setItem(LS_KEY, JSON.stringify(window.state));
     return cloudSaved;
   }
 
   /* =========================================================================
-     3. ON DATA UPDATE (Targeted Cloud Update)
+     4. ON DATA UPDATE (Targeted Cloud Updates)
      ========================================================================= */
 
-  /**
-   * Performs a targeted update on a specific document in Cloud Firestore.
-   */
   async updateDocument(collectionName, docId, updateFields) {
     const cleanFields = JSON.parse(JSON.stringify(updateFields));
     let cloudUpdated = false;
@@ -246,9 +279,6 @@ export class DatabaseManager {
     return cloudUpdated;
   }
 
-  /**
-   * Updates main unified state document in Firestore.
-   */
   async saveMainStateDoc() {
     if (!this.isFirebaseActive() || navigator.onLine === false) return;
     try {
@@ -260,7 +290,7 @@ export class DatabaseManager {
   }
 
   /* =========================================================================
-     4. OFFLINE FALLBACK & SYNC QUEUE MANAGEMENT
+     5. OFFLINE FALLBACK & SYNC QUEUE MANAGEMENT
      ========================================================================= */
 
   enqueueOfflineOp(operation) {
@@ -366,15 +396,7 @@ export class DatabaseManager {
             await batch.commit();
           }
 
-          if (typeof window.updateSuggestions === 'function') window.updateSuggestions();
-          if (typeof window.renderTestingSidebarList === 'function') window.renderTestingSidebarList();
-          if (typeof window.renderMaster === 'function') window.renderMaster();
-          if (typeof window.renderDashboard === 'function') window.renderDashboard();
-          if (typeof window.renderWarnings === 'function') window.renderWarnings();
-          if (typeof window.renderActivityLog === 'function') window.renderActivityLog();
-          if (typeof window.renderUsers === 'function') window.renderUsers();
-          if (typeof window.renderSchedule === 'function') window.renderSchedule();
-
+          this.renderAllUIViews();
           window.toast?.('Master Database restored and synced to Firebase Cloud Firestore successfully.');
           resolve(true);
         } catch (err) {
