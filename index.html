@@ -2729,6 +2729,64 @@ function updateAgeReminderBanner(m){
   }).join('');
 }
 
+function forceUpdateRecordStatus(trackingNumber, testHistoryArray, plannedIntervals, grade) {
+  const m = findMaster(trackingNumber);
+  if (!m) return;
+
+  const has28Day = testHistoryArray.some(t => t.testingAge === '28 Days');
+  const targetGrade = parseInt(grade.toString().match(/\d+/) || ['0'][0], 10);
+  
+  let earlyTargetAchieved = false;
+  if (!has28Day && targetGrade > 0) {
+    earlyTargetAchieved = testHistoryArray.some(t => t.testingAge !== '28 Days' && Number(t.strength) >= targetGrade);
+  }
+
+  let dbUpdated = false;
+
+  // STEP 2: 28-DAY KILL SWITCH
+  if (has28Day) {
+    if (m.status !== 'Completed') {
+      m.status = 'Completed';
+      dbUpdated = true;
+    }
+    const statusField = document.getElementById('rc-status');
+    if (statusField) statusField.textContent = 'Completed';
+
+    plannedIntervals.forEach(age => {
+      if (age !== '28 Days' && !testHistoryArray.some(t => t.testingAge === age)) {
+        if (!state.skippedTests) state.skippedTests = [];
+        if (!state.skippedTests.some(s => s.trackingNumber === trackingNumber && s.skippedAge === age)) {
+          state.skippedTests.push({ trackingNumber, skippedAge: age, skippedBy: 'System Auto-Skip', reason: '28-Day Completed' });
+          dbUpdated = true;
+        }
+      }
+    });
+
+  // STEP 3: EARLY TARGET ACHIEVED
+  } else if (earlyTargetAchieved) {
+    if (m.status !== 'Target Achieved - Awaiting 28D') {
+      m.status = 'Target Achieved - Awaiting 28D';
+      dbUpdated = true;
+    }
+    const statusField = document.getElementById('rc-status');
+    if (statusField) statusField.textContent = 'Target Achieved - Awaiting 28D';
+
+    plannedIntervals.forEach(age => {
+      if (age !== '28 Days' && !testHistoryArray.some(t => t.testingAge === age)) {
+        if (!state.skippedTests) state.skippedTests = [];
+        if (!state.skippedTests.some(s => s.trackingNumber === trackingNumber && s.skippedAge === age)) {
+          state.skippedTests.push({ trackingNumber, skippedAge: age, skippedBy: 'System Auto-Skip', reason: 'Target Grade Achieved Early' });
+          dbUpdated = true;
+        }
+      }
+    });
+  }
+
+  if (dbUpdated) {
+    saveState();
+  }
+}
+
 function recallForTesting(){
   const tn = document.getElementById('test-search').value;
   const m = findMaster(tn);
@@ -2752,6 +2810,10 @@ function recallForTesting(){
   document.getElementById('tt-completed').textContent = `${d.testsCompleted} / ${m.numCubes}`;
   document.getElementById('tt-e-date').valueAsDate = new Date();
   if(currentUser) document.getElementById('tt-e-testedby').value = currentUser.username;
+  
+  const existingTests = testsFor(m.trackingNumber);
+  const activeAges = m.activeAges || ['3 Days', '7 Days', '14 Days', '28 Days'];
+  forceUpdateRecordStatus(m.trackingNumber, existingTests, activeAges, m.grade);
   
   updateAgeReminderBanner(m);
   clearTestingForm();
