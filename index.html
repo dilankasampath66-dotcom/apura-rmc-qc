@@ -1021,24 +1021,25 @@ td.mono{ font-family: var(--font-mono); font-size:13px; }
         <div class="search-row" style="margin:0;">
           <div style="display:flex;align-items:center;gap:6px;">
             <label style="margin:0;white-space:nowrap;">From:</label>
-            <input type="date" id="dash-start" style="max-width:150px;" onchange="renderDashboard()">
+            <input type="date" id="dash-start" style="max-width:150px;">
           </div>
           <div style="display:flex;align-items:center;gap:6px;">
             <label style="margin:0;white-space:nowrap;">To:</label>
-            <input type="date" id="dash-end" style="max-width:150px;" onchange="renderDashboard()">
+            <input type="date" id="dash-end" style="max-width:150px;">
           </div>
           <div style="display:flex;align-items:center;gap:6px;">
             <label style="margin:0;white-space:nowrap;">Grade:</label>
-            <select id="dash-grade" style="max-width:140px;" onchange="renderDashboard()">
+            <select id="dash-grade" style="max-width:140px;">
               <option value="">All Grades</option>
             </select>
           </div>
           <div style="display:flex;align-items:center;gap:6px;">
             <label style="margin:0;white-space:nowrap;">Customer:</label>
-            <select id="dash-customer" style="max-width:180px;" onchange="renderDashboard()">
+            <select id="dash-customer" style="max-width:180px;">
               <option value="">All Customers</option>
             </select>
           </div>
+          <button id="btn-apply-filters" class="btn btn-primary" onclick="handleApplyFilters()">Apply Filters</button>
           <button class="btn btn-ghost" onclick="clearDashboardFilters()">Clear Filters</button>
         </div>
       </div>
@@ -1154,6 +1155,14 @@ td.mono{ font-family: var(--font-mono); font-size:13px; }
             <h4 style="font-size:13.5px; color:var(--ink); margin:0 0 12px 0; font-weight:700;">6. Slump vs. Strength Sensitivity (Trendline)</h4>
             <div class="canvas-container" style="position:relative; height:320px; width:100%;">
               <canvas id="chart-slump-sensitivity"></canvas>
+            </div>
+          </div>
+
+          <!-- Chart 7: Statistical Distribution (Histogram) -->
+          <div class="chart-card" style="background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-sm); padding:16px; box-shadow:var(--shadow); grid-column: 1 / -1;">
+            <h4 style="font-size:13.5px; color:var(--ink); margin:0 0 12px 0; font-weight:700;">7. 28-Day Strength Distribution (Normal Curve)</h4>
+            <div class="canvas-container" style="position:relative; height:320px; width:100%;">
+              <canvas id="chart-histogram"></canvas>
             </div>
           </div>
 
@@ -2861,34 +2870,17 @@ function clearDashboardFilters(){
   if(document.getElementById('dash-end')) document.getElementById('dash-end').value = '';
   if(document.getElementById('dash-grade')) document.getElementById('dash-grade').value = '';
   if(document.getElementById('dash-customer')) document.getElementById('dash-customer').value = '';
-  renderDashboard();
+  handleApplyFilters();
 }
 
 function renderDashboard(){
   populateDashboardFilterDropdowns();
+  handleApplyFilters();
+}
 
-  const startVal = document.getElementById('dash-start') ? document.getElementById('dash-start').value : '';
-  const endVal = document.getElementById('dash-end') ? document.getElementById('dash-end').value : '';
-  const gradeVal = document.getElementById('dash-grade') ? document.getElementById('dash-grade').value : '';
-  const custVal = document.getElementById('dash-customer') ? document.getElementById('dash-customer').value : '';
+function renderDashboardKPIs(filteredMaster, filteredTests) {
 
-  let filteredMaster = state.master;
-
-  if(startVal){
-    filteredMaster = filteredMaster.filter(m => m.castingDate >= startVal);
-  }
-  if(endVal){
-    filteredMaster = filteredMaster.filter(m => m.castingDate <= endVal);
-  }
-  if(gradeVal){
-    filteredMaster = filteredMaster.filter(m => m.grade === gradeVal);
-  }
-  if(custVal){
-    filteredMaster = filteredMaster.filter(m => m.customer === custVal);
-  }
-
-  const filteredTNSet = new Set(filteredMaster.map(m => m.trackingNumber));
-  const filteredTests = state.tests.filter(t => filteredTNSet.has(t.trackingNumber));
+  // Data is now passed in as parameters
 
   // Schedule status calculation for filtered set
   const sched = [];
@@ -4014,64 +4006,73 @@ function clearChartPlaceholder(canvasId) {
 }
 
 /**
- * STEP 2: Asynchronous module to fetch records from Firebase or local state fallback,
- * apply current dashboard filters, and process data for Chart.js rendering.
+ * Core Filter Logic: Reads DOM inputs and filters raw dataset
  */
-async function fetchAndRenderEngineeringCharts() {
-  try {
-    let masterData = [];
-    let testData = [];
+function applyGlobalFilters(rawData) {
+  const startVal = document.getElementById('dash-start') ? document.getElementById('dash-start').value : '';
+  const endVal = document.getElementById('dash-end') ? document.getElementById('dash-end').value : '';
+  const gradeVal = document.getElementById('dash-grade') ? document.getElementById('dash-grade').value : '';
+  const custVal = document.getElementById('dash-customer') ? document.getElementById('dash-customer').value.trim().toLowerCase() : '';
 
-    // Safe Firebase Fetching wrapped in try/catch block
+  let filteredMaster = rawData.master || [];
+  if (startVal) filteredMaster = filteredMaster.filter(m => m && m.castingDate >= startVal);
+  if (endVal) filteredMaster = filteredMaster.filter(m => m && m.castingDate <= endVal);
+  if (gradeVal) filteredMaster = filteredMaster.filter(m => m && m.grade === gradeVal);
+  if (custVal) filteredMaster = filteredMaster.filter(m => m && (m.customer || '').toLowerCase().includes(custVal));
+
+  const filteredTNs = new Set(filteredMaster.map(m => m ? m.trackingNumber : null).filter(Boolean));
+  const filteredTests = (rawData.tests || []).filter(t => t && filteredTNs.has(t.trackingNumber));
+
+  return { filteredMaster, filteredTests };
+}
+
+/**
+ * Triggered by the "Apply Filters" button. Coordinates data fetching, filtering, and UI updates.
+ */
+async function handleApplyFilters() {
+  try {
+    let masterData = window.state && Array.isArray(window.state.master) ? window.state.master : [];
+    let testData = window.state && Array.isArray(window.state.tests) ? window.state.tests : [];
+
     if (window.loadStateFromFirebase && typeof window.loadStateFromFirebase === 'function') {
       try {
         const cloudData = await window.loadStateFromFirebase();
         if (cloudData && typeof cloudData === 'object') {
-          masterData = Array.isArray(cloudData.master) ? cloudData.master : [];
-          testData = Array.isArray(cloudData.tests) ? cloudData.tests : [];
+          masterData = Array.isArray(cloudData.master) ? cloudData.master : masterData;
+          testData = Array.isArray(cloudData.tests) ? cloudData.tests : testData;
         }
       } catch (fbErr) {
-        console.warn("⚠️ Firebase cloud fetch error in engineering charts module:", fbErr);
+        console.warn("⚠️ Firebase cloud fetch error during apply filters:", fbErr);
       }
     }
 
-    // Local state fallback if cloud data empty or unavailable
-    if (!masterData.length && window.state && Array.isArray(window.state.master)) {
-      masterData = window.state.master;
+    const { filteredMaster, filteredTests } = applyGlobalFilters({ master: masterData, tests: testData });
+    
+    // Update KPI panels directly with filtered data
+    if (typeof renderDashboardKPIs === 'function') {
+      renderDashboardKPIs(filteredMaster, filteredTests);
     }
-    if (!testData.length && window.state && Array.isArray(window.state.tests)) {
-      testData = window.state.tests;
-    }
-
-    // Extract current dashboard filter values
-    const gradeVal = document.getElementById('dash-filter-grade') ? document.getElementById('dash-filter-grade').value : '';
-    const custVal = document.getElementById('dash-filter-customer') ? document.getElementById('dash-filter-customer').value.trim().toLowerCase() : '';
-    const startVal = document.getElementById('dash-filter-start') ? document.getElementById('dash-filter-start').value : '';
-    const endVal = document.getElementById('dash-filter-end') ? document.getElementById('dash-filter-end').value : '';
-
-    // Apply dashboard filter criteria with safeguards
-    let filteredMaster = masterData || [];
-    if (gradeVal) filteredMaster = filteredMaster.filter(m => m && m.grade === gradeVal);
-    if (custVal) filteredMaster = filteredMaster.filter(m => m && (m.customer || '').toLowerCase().includes(custVal));
-    if (startVal) filteredMaster = filteredMaster.filter(m => m && m.castingDate >= startVal);
-    if (endVal) filteredMaster = filteredMaster.filter(m => m && m.castingDate <= endVal);
-
-    const filteredTNs = new Set(filteredMaster.map(m => m ? m.trackingNumber : null).filter(Boolean));
-    let filteredTests = (testData || []).filter(t => t && filteredTNs.has(t.trackingNumber));
-
-    // STEP 3: Execute individual chart processing and rendering modules
-    renderChartCorrelation(filteredMaster, filteredTests);
-    renderChartWeather(filteredMaster, filteredTests);
-    renderChartSlump(filteredMaster, filteredTests);
-    renderChartSiloPerformance(filteredMaster, filteredTests);
-    renderChartTargetControl(filteredMaster, filteredTests);
-    renderChartSlumpSensitivity(filteredMaster, filteredTests);
-
+    
+    // Update all charts via the new .update() orchestrator
+    updateAllCharts(filteredMaster, filteredTests);
   } catch (err) {
-    console.error("⚠️ Error executing fetchAndRenderEngineeringCharts:", err);
+    console.error("⚠️ Error handling apply filters:", err);
   }
 }
-window.fetchAndRenderEngineeringCharts = fetchAndRenderEngineeringCharts;
+window.handleApplyFilters = handleApplyFilters;
+
+/**
+ * Orchestrator to update all active Chart.js instances with newly filtered data.
+ */
+function updateAllCharts(filteredMaster, filteredTests) {
+  renderChartCorrelation(filteredMaster, filteredTests);
+  renderChartWeather(filteredMaster, filteredTests);
+  renderChartSlump(filteredMaster, filteredTests);
+  renderChartSiloPerformance(filteredMaster, filteredTests);
+  renderChartTargetControl(filteredMaster, filteredTests);
+  renderChartSlumpSensitivity(filteredMaster, filteredTests);
+  renderChartHistogram(filteredMaster, filteredTests);
+}
 
 /**
  * CHART 1: 7-Day vs. 28-Day Predictive Correlation (Scatter Plot)
@@ -4107,50 +4108,55 @@ function renderChartCorrelation(filteredMaster, filteredTests) {
     });
 
     if (scatterPoints.length === 0) {
+      destroyEngineeringChart(canvasId);
       showChartPlaceholder(canvasId, "Insufficient matched 7-Day & 28-Day test pairs available.");
       return;
     }
 
     clearChartPlaceholder(canvasId);
-    destroyEngineeringChart(canvasId);
-
-    const ctx = document.getElementById(canvasId).getContext('2d');
-    engineeringChartInstances[canvasId] = new Chart(ctx, {
-      type: 'scatter',
-      data: {
-        datasets: [{
-          label: '7d vs 28d Strength',
-          data: scatterPoints,
-          backgroundColor: '#eb1c24',
-          borderColor: '#c9151c',
-          pointRadius: 6,
-          pointHoverRadius: 8
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false },
-          tooltip: {
-            callbacks: {
-              label: (ctx) => {
-                const pt = ctx.raw;
-                return ` ${pt.trackingNumber}: 7d=${pt.x} N/mm², 28d=${pt.y} N/mm²`;
+    
+    if (engineeringChartInstances[canvasId]) {
+      engineeringChartInstances[canvasId].data.datasets[0].data = scatterPoints;
+      engineeringChartInstances[canvasId].update();
+    } else {
+      const ctx = document.getElementById(canvasId).getContext('2d');
+      engineeringChartInstances[canvasId] = new Chart(ctx, {
+        type: 'scatter',
+        data: {
+          datasets: [{
+            label: '7d vs 28d Strength',
+            data: scatterPoints,
+            backgroundColor: '#eb1c24',
+            borderColor: '#c9151c',
+            pointRadius: 6,
+            pointHoverRadius: 8
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => {
+                  const pt = ctx.raw;
+                  return ` ${pt.trackingNumber}: 7d=${pt.x} N/mm², 28d=${pt.y} N/mm²`;
+                }
               }
             }
-          }
-        },
-        scales: {
-          x: {
-            title: { display: true, text: '7-Day Strength (N/mm²)', font: { size: 11, weight: 'bold' } }
           },
-          y: {
-            title: { display: true, text: '28-Day Strength (N/mm²)', font: { size: 11, weight: 'bold' } }
+          scales: {
+            x: {
+              title: { display: true, text: '7-Day Strength (N/mm²)', font: { size: 11, weight: 'bold' } }
+            },
+            y: {
+              title: { display: true, text: '28-Day Strength (N/mm²)', font: { size: 11, weight: 'bold' } }
+            }
           }
         }
-      }
-    });
+      });
+    }
   } catch (err) {
     console.error("Error rendering Chart 1 (Correlation):", err);
     showChartPlaceholder(canvasId, "Unable to render 7d vs 28d Correlation Chart: " + err.message);
@@ -4185,6 +4191,7 @@ function renderChartWeather(filteredMaster, filteredTests) {
 
     const categories = Object.keys(weatherGroups);
     if (categories.length === 0) {
+      destroyEngineeringChart(canvasId);
       showChartPlaceholder(canvasId, "No 28-Day test data categorized by weather condition.");
       return;
     }
@@ -4193,21 +4200,26 @@ function renderChartWeather(filteredMaster, filteredTests) {
     const dataValues = categories.map(c => parseFloat((weatherGroups[c].sum / weatherGroups[c].count).toFixed(2)));
 
     clearChartPlaceholder(canvasId);
-    destroyEngineeringChart(canvasId);
 
-    const ctx = document.getElementById(canvasId).getContext('2d');
     const bgColors = ['#f5b041', '#5d6d7e', '#2980b9', '#27ae60', '#8e44ad', '#eb1c24'];
-
-    engineeringChartInstances[canvasId] = new Chart(ctx, {
-      type: 'bar',
-      data: {
-        labels: labels,
-        datasets: [{
-          label: 'Avg 28-Day Strength (N/mm²)',
-          data: dataValues,
-          backgroundColor: labels.map((_, i) => bgColors[i % bgColors.length]),
-          borderRadius: 6
-        }]
+    
+    if (engineeringChartInstances[canvasId]) {
+      engineeringChartInstances[canvasId].data.labels = labels;
+      engineeringChartInstances[canvasId].data.datasets[0].data = dataValues;
+      engineeringChartInstances[canvasId].data.datasets[0].backgroundColor = labels.map((_, i) => bgColors[i % bgColors.length]);
+      engineeringChartInstances[canvasId].update();
+    } else {
+      const ctx = document.getElementById(canvasId).getContext('2d');
+      engineeringChartInstances[canvasId] = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Avg 28-Day Strength (N/mm²)',
+            data: dataValues,
+            backgroundColor: labels.map((_, i) => bgColors[i % bgColors.length]),
+            borderRadius: 6
+          }]
       },
       options: {
         responsive: true,
@@ -4264,6 +4276,7 @@ function renderChartSlump(filteredMaster, filteredTests) {
     const sortedSlumps = Object.keys(slumpGroups).map(Number).sort((a, b) => a - b);
 
     if (sortedSlumps.length === 0) {
+      destroyEngineeringChart(canvasId);
       showChartPlaceholder(canvasId, `Insufficient slump test data for grade ${targetGrade}.`);
       return;
     }
@@ -4272,23 +4285,29 @@ function renderChartSlump(filteredMaster, filteredTests) {
     const dataValues = sortedSlumps.map(s => parseFloat((slumpGroups[s].sum / slumpGroups[s].count).toFixed(2)));
 
     clearChartPlaceholder(canvasId);
-    destroyEngineeringChart(canvasId);
 
-    const ctx = document.getElementById(canvasId).getContext('2d');
-    engineeringChartInstances[canvasId] = new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels: labels,
-        datasets: [{
-          label: `Avg 28d Strength — Grade ${targetGrade} (N/mm²)`,
-          data: dataValues,
-          borderColor: '#1668b3',
-          backgroundColor: 'rgba(22, 104, 179, 0.1)',
-          fill: true,
-          tension: 0.3,
-          pointRadius: 5,
-          pointHoverRadius: 7
-        }]
+    if (engineeringChartInstances[canvasId]) {
+      engineeringChartInstances[canvasId].data.labels = labels;
+      engineeringChartInstances[canvasId].data.datasets[0].data = dataValues;
+      engineeringChartInstances[canvasId].data.datasets[0].label = `Avg 28d Strength — Grade ${targetGrade} (N/mm²)`;
+      engineeringChartInstances[canvasId].options.scales.x.title.text = `Slump Workability (mm) — Target Grade ${targetGrade}`;
+      engineeringChartInstances[canvasId].update();
+    } else {
+      const ctx = document.getElementById(canvasId).getContext('2d');
+      engineeringChartInstances[canvasId] = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: `Avg 28d Strength — Grade ${targetGrade} (N/mm²)`,
+            data: dataValues,
+            borderColor: '#1668b3',
+            backgroundColor: 'rgba(22, 104, 179, 0.1)',
+            fill: true,
+            tension: 0.3,
+            pointRadius: 5,
+            pointHoverRadius: 7
+          }]
       },
       options: {
         responsive: true,
@@ -4348,6 +4367,7 @@ function renderChartSiloPerformance(filteredMaster, filteredTests) {
 
     const labels = Object.keys(groups).sort();
     if (labels.length === 0) {
+      destroyEngineeringChart(canvasId);
       showChartPlaceholder(canvasId, `No 28-Day test data available for grade ${targetGrade} to compare silos/bulks.`);
       return;
     }
@@ -4355,21 +4375,25 @@ function renderChartSiloPerformance(filteredMaster, filteredTests) {
     const dataValues = labels.map(label => parseFloat((groups[label].sum / groups[label].count).toFixed(2)));
 
     clearChartPlaceholder(canvasId);
-    destroyEngineeringChart(canvasId);
 
-    const ctx = document.getElementById(canvasId).getContext('2d');
-    engineeringChartInstances[canvasId] = new Chart(ctx, {
-      type: 'bar',
-      data: {
-        labels: labels,
-        datasets: [{
-          label: 'Avg 28-Day Strength (N/mm²)',
-          data: dataValues,
-          backgroundColor: '#4B6B61',
-          borderColor: '#1E2A28',
-          borderWidth: 1,
-          borderRadius: 4
-        }]
+    if (engineeringChartInstances[canvasId]) {
+      engineeringChartInstances[canvasId].data.labels = labels;
+      engineeringChartInstances[canvasId].data.datasets[0].data = dataValues;
+      engineeringChartInstances[canvasId].update();
+    } else {
+      const ctx = document.getElementById(canvasId).getContext('2d');
+      engineeringChartInstances[canvasId] = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Avg 28-Day Strength (N/mm²)',
+            data: dataValues,
+            backgroundColor: '#4B6B61',
+            borderColor: '#1E2A28',
+            borderWidth: 1,
+            borderRadius: 4
+          }]
       },
       options: {
         responsive: true,
@@ -4425,6 +4449,7 @@ function renderChartSlumpSensitivity(filteredMaster, filteredTests) {
     });
 
     if (scatterPoints.length < 2) {
+      destroyEngineeringChart(canvasId);
       showChartPlaceholder(canvasId, `Insufficient paired slump/strength data for grade ${targetGrade} to generate a sensitivity correlation.`);
       return;
     }
@@ -4442,6 +4467,7 @@ function renderChartSlumpSensitivity(filteredMaster, filteredTests) {
     // Protect against perfectly vertical lines (divide by zero)
     const denominator = (n * sumXX - sumX * sumX);
     if (denominator === 0) {
+      destroyEngineeringChart(canvasId);
       showChartPlaceholder(canvasId, `Data lacks variation in slump to plot a trendline.`);
       return;
     }
@@ -4461,35 +4487,47 @@ function renderChartSlumpSensitivity(filteredMaster, filteredTests) {
     ];
 
     clearChartPlaceholder(canvasId);
-    destroyEngineeringChart(canvasId);
 
-    const ctx = document.getElementById(canvasId).getContext('2d');
-    engineeringChartInstances[canvasId] = new Chart(ctx, {
-      type: 'scatter',
-      data: {
-        datasets: [
-          {
-            label: '28-Day Strength (N/mm²)',
-            data: scatterPoints,
-            backgroundColor: 'rgba(54, 162, 235, 0.7)',
-            borderColor: 'rgba(54, 162, 235, 1)',
-            pointRadius: 5,
-            pointHoverRadius: 7,
-            order: 2
-          },
-          {
-            label: 'Sensitivity Trendline',
-            data: trendPoints,
-            type: 'line',
-            showLine: true,
-            borderColor: '#eb1c24',
-            borderWidth: 2,
-            borderDash: [5, 5],
-            pointRadius: 0,
-            fill: false,
-            order: 1
-          }
-        ]
+    if (engineeringChartInstances[canvasId]) {
+      engineeringChartInstances[canvasId].data.datasets[0].data = scatterPoints;
+      engineeringChartInstances[canvasId].data.datasets[1].data = trendPoints;
+      
+      // Update dynamic tooltip logic directly on the chart instance
+      engineeringChartInstances[canvasId].options.plugins.tooltip.callbacks.label = (ctx) => {
+        if (ctx.datasetIndex === 1) return `Trendline: y = ${slope.toFixed(2)}x + ${intercept.toFixed(2)}`;
+        const pt = ctx.raw;
+        return ` ${pt.trackingNumber}: Slump ${pt.x}mm, Str ${pt.y} N/mm²`;
+      };
+      
+      engineeringChartInstances[canvasId].update();
+    } else {
+      const ctx = document.getElementById(canvasId).getContext('2d');
+      engineeringChartInstances[canvasId] = new Chart(ctx, {
+        type: 'scatter',
+        data: {
+          datasets: [
+            {
+              label: '28-Day Strength (N/mm²)',
+              data: scatterPoints,
+              backgroundColor: 'rgba(54, 162, 235, 0.7)',
+              borderColor: 'rgba(54, 162, 235, 1)',
+              pointRadius: 5,
+              pointHoverRadius: 7,
+              order: 2
+            },
+            {
+              label: 'Sensitivity Trendline',
+              data: trendPoints,
+              type: 'line',
+              showLine: true,
+              borderColor: '#eb1c24',
+              borderWidth: 2,
+              borderDash: [5, 5],
+              pointRadius: 0,
+              fill: false,
+              order: 1
+            }
+          ]
       },
       options: {
         responsive: true,
@@ -4547,6 +4585,7 @@ function renderChartTargetControl(filteredMaster, filteredTests) {
     const recentMature = matureTests.slice(-30);
 
     if (recentMature.length === 0) {
+      destroyEngineeringChart(canvasId);
       showChartPlaceholder(canvasId, "No 28-day mature test results available for Target Control analysis.");
       return;
     }
@@ -4556,63 +4595,155 @@ function renderChartTargetControl(filteredMaster, filteredTests) {
     const targetBaselines = recentMature.map(t => t.fck);
 
     clearChartPlaceholder(canvasId);
-    destroyEngineeringChart(canvasId);
 
-    const ctx = document.getElementById(canvasId).getContext('2d');
-    engineeringChartInstances[canvasId] = new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels: labels,
-        datasets: [
-          {
-            label: 'Actual 28d Strength (N/mm²)',
-            data: actualStrengths,
-            borderColor: '#1e7e34',
-            backgroundColor: 'rgba(30, 126, 52, 0.1)',
-            fill: true,
-            tension: 0.2,
-            pointRadius: 5,
-            pointHoverRadius: 7
-          },
-          {
-            label: 'Target Characteristic Strength fck (Baseline)',
-            data: targetBaselines,
-            borderColor: '#eb1c24',
-            borderWidth: 2,
-            borderDash: [5, 5],
-            pointRadius: 0,
-            fill: false
-          }
-        ]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-          tooltip: {
-            callbacks: {
-              label: (ctx) => {
-                const idx = ctx.dataIndex;
-                const item = recentMature[idx];
-                if (ctx.datasetIndex === 0 && item) {
-                  const margin = (item.strength - item.fck).toFixed(2);
-                  const prefix = margin >= 0 ? '+' : '';
-                  return ` Actual: ${item.strength} N/mm² (Safety Margin: ${prefix}${margin} N/mm²)`;
+    if (engineeringChartInstances[canvasId]) {
+      engineeringChartInstances[canvasId].data.labels = labels;
+      engineeringChartInstances[canvasId].data.datasets[0].data = actualStrengths;
+      engineeringChartInstances[canvasId].data.datasets[1].data = targetBaselines;
+      engineeringChartInstances[canvasId].update();
+    } else {
+      const ctx = document.getElementById(canvasId).getContext('2d');
+      engineeringChartInstances[canvasId] = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: 'Actual 28d Strength (N/mm²)',
+              data: actualStrengths,
+              borderColor: '#1e7e34',
+              backgroundColor: 'rgba(30, 126, 52, 0.1)',
+              fill: true,
+              tension: 0.2,
+              pointRadius: 5,
+              pointHoverRadius: 7
+            },
+            {
+              label: 'Target Characteristic Strength fck (Baseline)',
+              data: targetBaselines,
+              borderColor: '#eb1c24',
+              borderWidth: 2,
+              borderDash: [5, 5],
+              pointRadius: 0,
+              fill: false
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            tooltip: {
+              callbacks: {
+                label: (ctx) => {
+                  const idx = ctx.dataIndex;
+                  const item = recentMature[idx];
+                  if (ctx.datasetIndex === 0 && item) {
+                    const margin = (item.strength - item.fck).toFixed(2);
+                    const prefix = margin >= 0 ? '+' : '';
+                    return ` Actual: ${item.strength} N/mm² (Safety Margin: ${prefix}${margin} N/mm²)`;
+                  }
+                  return ` Target fck (${item.grade}): ${item.fck} N/mm²`;
                 }
-                return ` Target fck (${item.grade}): ${item.fck} N/mm²`;
               }
             }
+          },
+          scales: {
+            x: { title: { display: true, text: '28-Day Tests (Chronological Order)', font: { size: 11, weight: 'bold' } } },
+            y: { title: { display: true, text: 'Compressive Strength (N/mm²)', font: { size: 11, weight: 'bold' } }, beginAtZero: false }
           }
-        },
-        scales: {
-          x: { title: { display: true, text: '28-Day Tests (Chronological Order)', font: { size: 11, weight: 'bold' } } },
-          y: { title: { display: true, text: 'Compressive Strength (N/mm²)', font: { size: 11, weight: 'bold' } }, beginAtZero: false }
         }
-      }
-    });
+      });
+    }
   } catch (err) {
     console.error("Error rendering Chart 5 (Target Control):", err);
     showChartPlaceholder(canvasId, "Unable to render Target Control Chart: " + err.message);
+  }
+}
+
+/**
+ * CHART 7: Statistical Distribution (Histogram)
+ * Groups 28-day strength results into 2.0 N/mm² bins to visualize standard deviation.
+ */
+function renderChartHistogram(filteredMaster, filteredTests) {
+  const canvasId = 'chart-histogram';
+  try {
+    const matureStrengths = [];
+    (filteredTests || []).forEach(t => {
+      if (!t || t.testingAge !== '28 Days') return;
+      const str = parseFloat(t.strength);
+      if (!isNaN(str) && str > 0) matureStrengths.push(str);
+    });
+
+    if (matureStrengths.length < 3) {
+      destroyEngineeringChart(canvasId);
+      showChartPlaceholder(canvasId, "Insufficient 28-day data points to generate a statistical distribution histogram.");
+      return;
+    }
+
+    const minStr = Math.floor(Math.min(...matureStrengths) / 2) * 2;
+    const maxStr = Math.ceil(Math.max(...matureStrengths) / 2) * 2;
+    const binSize = 2.0;
+    const bins = {};
+    
+    for (let i = minStr; i <= maxStr; i += binSize) {
+      bins[`${i.toFixed(1)}-${(i + binSize).toFixed(1)}`] = 0;
+    }
+
+    matureStrengths.forEach(str => {
+      const binStart = Math.floor(str / binSize) * binSize;
+      const key = `${binStart.toFixed(1)}-${(binStart + binSize).toFixed(1)}`;
+      if (bins[key] !== undefined) {
+        bins[key]++;
+      }
+    });
+
+    const labels = Object.keys(bins);
+    const dataValues = Object.values(bins);
+
+    clearChartPlaceholder(canvasId);
+
+    if (engineeringChartInstances[canvasId]) {
+      engineeringChartInstances[canvasId].data.labels = labels;
+      engineeringChartInstances[canvasId].data.datasets[0].data = dataValues;
+      engineeringChartInstances[canvasId].update();
+    } else {
+      const ctx = document.getElementById(canvasId).getContext('2d');
+      engineeringChartInstances[canvasId] = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Frequency (Count)',
+            data: dataValues,
+            backgroundColor: 'rgba(54, 162, 235, 0.6)',
+            borderColor: 'rgba(54, 162, 235, 1)',
+            borderWidth: 1,
+            borderRadius: 2
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false }
+          },
+          scales: {
+            x: { 
+              title: { display: true, text: '28-Day Compressive Strength Range (N/mm²)', font: { size: 11, weight: 'bold' } }
+            },
+            y: { 
+              title: { display: true, text: 'Frequency', font: { size: 11, weight: 'bold' } },
+              beginAtZero: true,
+              ticks: { stepSize: 1 }
+            }
+          }
+        }
+      });
+    }
+  } catch (err) {
+    console.error("Error rendering Chart 7 (Histogram):", err);
+    showChartPlaceholder(canvasId, "Unable to render Histogram Chart: " + err.message);
   }
 }
 
