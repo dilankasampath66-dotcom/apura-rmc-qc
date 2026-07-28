@@ -1796,16 +1796,41 @@ let state = {
 let currentUser = null;
 let nextTrackingSeq = 1;
 
+/* ─────────────────────────────────────────────────────────────────────────────
+   HARDCODED SYSTEM ACCOUNTS — Never stored in Firebase, never overwritten.
+   These are the immutable root-level credentials for system access.
+   HIERARCHY: super_admin → company_admin → operator/viewer
+─────────────────────────────────────────────────────────────────────────────── */
+const SYSTEM_ACCOUNTS = [
+  {
+    username:  'superadmin',
+    password:  'APURA@SUPER2025',
+    role:      'super_admin',
+    companyId: '_SYSTEM_',
+    displayName: 'Super Administrator'
+  },
+  {
+    username:  'admin',
+    password:  '123',
+    role:      'admin',
+    companyId: 'APURA_RMC',
+    displayName: 'Company Administrator'
+  }
+];
+
 /* ---------------------- ACCESS CONTROL & AUTH ---------------------- */
 function isAdmin(){
-  return currentUser && currentUser.role === 'admin';
+  return currentUser && (currentUser.role === 'admin' || currentUser.role === 'super_admin' || currentUser.role === 'company_admin');
+}
+function isSuperAdmin(){
+  return currentUser && currentUser.role === 'super_admin';
 }
 
 function login(){
-  const userEl  = document.getElementById('login-username-input');
-  const passEl  = document.getElementById('login-password-input');
-  const errEl   = document.getElementById('login-error-msg');
-  const btn     = document.getElementById('login-submit-btn');
+  const userEl = document.getElementById('login-username-input');
+  const passEl = document.getElementById('login-password-input');
+  const errEl  = document.getElementById('login-error-msg');
+  const btn    = document.getElementById('login-submit-btn');
   if(!userEl || !passEl) return;
 
   const uname = userEl.value.trim();
@@ -1816,30 +1841,37 @@ function login(){
     return;
   }
 
-  // Loading state
   if(btn){ btn.disabled = true; btn.textContent = 'Signing in…'; }
   if(errEl) errEl.style.display = 'none';
 
-  const found = state.users.find(u =>
+  // ── PRIORITY 1: Check hardcoded SYSTEM_ACCOUNTS first (never Firebase-dependent) ──
+  let found = SYSTEM_ACCOUNTS.find(u =>
     u.username.toLowerCase() === uname.toLowerCase() && u.password === pass
   );
+
+  // ── PRIORITY 2: Check runtime users from state (Company Admin-created accounts) ──
+  if(!found && Array.isArray(state.users)) {
+    found = state.users.find(u =>
+      u.username && u.password &&
+      u.username.toLowerCase() === uname.toLowerCase() &&
+      u.password === pass
+    );
+  }
 
   if(!found){
     if(btn){ btn.disabled = false; btn.textContent = 'Sign In & Start Session'; }
     _loginError(errEl, '✕ Invalid username or password. Please try again.');
-    // Shake the card for visual feedback
     const card = document.querySelector('.login-card');
     if(card){
-      card.style.animation = 'none';
+      card.style.transition = 'transform 0.08s';
       card.style.transform = 'translateX(-8px)';
-      setTimeout(() => { card.style.transform = 'translateX(8px)'; }, 80);
-      setTimeout(() => { card.style.transform = 'none'; card.style.transition = 'transform 0.2s'; }, 160);
+      setTimeout(() => { card.style.transform = 'translateX(8px)'; }, 90);
+      setTimeout(() => { card.style.transform = 'none'; }, 180);
     }
     return;
   }
 
-  // ── TASK 2: Session Initialization — store tenant data in sessionStorage ──
-  // Ensure user has companyId (back-fill for legacy accounts)
+  // ── SESSION INIT: Store tenant data ──
   if(!found.companyId) found.companyId = 'APURA_RMC';
   const companyId = found.companyId;
 
@@ -1848,23 +1880,26 @@ function login(){
   sessionStorage.setItem('username',   found.username);
   sessionStorage.setItem('loggedInAt', new Date().toISOString());
 
-  currentUser = found;
+  currentUser = { ...found };
   state.currentUser = found.username;
-  saveState();
+
+  // Only save to Firebase for non-system accounts (don't persist hardcoded accounts)
+  if(!SYSTEM_ACCOUNTS.some(s => s.username === found.username)){
+    saveState();
+  }
 
   if(errEl) errEl.style.display = 'none';
   userEl.value = '';
   passEl.value = '';
   if(btn){ btn.disabled = false; btn.textContent = 'Sign In & Start Session'; }
 
-  // Auto-fill technician names in forms
   const castSelect = document.getElementById('f-castedBy');
   if(castSelect) castSelect.value = found.username;
   const testSelect = document.getElementById('tt-e-testedby');
   if(testSelect) testSelect.value = found.username;
 
-  logActivity("User Login", "—", found.username, `User ${found.username} (${found.role}) logged in | Tenant: ${companyId}`);
-  toast(`Welcome back, ${found.username}! Logged in as ${found.role.toUpperCase()}.`);
+  logActivity("User Login", "—", found.username, `${found.role.toUpperCase()} logged in | Tenant: ${companyId}`);
+  toast(`Welcome back, ${found.username}! Logged in as ${found.role.replace(/_/g,' ').toUpperCase()}.`);
 
   applyRoleRestrictions();
   setTimeout(() => { showView('home'); }, 60);
@@ -1928,13 +1963,14 @@ function applyRoleRestrictions(){
   // Mobile bottom nav: shown on mobile only
   if(mobileBottomNav) mobileBottomNav.style.display = isMobile ? 'block' : 'none';
 
-  const isAdminUser = (currentUser.role === 'admin');
+  const isAdminUser = (currentUser.role === 'admin' || currentUser.role === 'super_admin' || currentUser.role === 'company_admin');
 
   // Update User Badges
   const uNameEl = document.getElementById('sidebar-user-name');
-  if(uNameEl) uNameEl.textContent = `${currentUser.username} (${currentUser.role.toUpperCase()})`;
+  const roleLabel = (currentUser.role || '').replace(/_/g,' ').toUpperCase();
+  if(uNameEl) uNameEl.textContent = `${currentUser.username} (${roleLabel})`;
   const liveUNameEl = document.getElementById('live-user-name');
-  if(liveUNameEl) liveUNameEl.textContent = `${currentUser.username} [${currentUser.role.toUpperCase()}]`;
+  if(liveUNameEl) liveUNameEl.textContent = `${currentUser.username} [${roleLabel}]`;
   // Mobile topbar user chip
   const mobileChip = document.getElementById('mobile-user-chip');
   if(mobileChip){ mobileChip.textContent = currentUser.username.toUpperCase(); mobileChip.style.display = 'inline'; }
