@@ -1,0 +1,3538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Apura RMC Plant — Cube QC System</title>
+
+<!-- CDN Libraries: Chart.js for charts, SheetJS for Excel export -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js" onload="if(document.getElementById('view-dashboard') && document.getElementById('view-dashboard').classList.contains('active')) renderDashboard();"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/SheetJS/0.19.3/xlsx.full.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Expanded:wght@600;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+/* ===================== DESIGN TOKENS & BASE ===================== */
+:root{
+  --bg:            #F3F5F4;   /* pale concrete grey */
+  --surface:       #FFFFFF;
+  --surface-sunk:  #EAEEED;
+  --line:          #D8DFDD;
+  --line-dark:     #BCC7C4;
+  --ink:           #1E2A28;   /* near-black aged concrete/steel */
+  --ink-soft:      #485854;   /* high contrast text soft */
+  --slate:         #3C5A63;   /* wet-concrete blue-grey — primary accent */
+  --slate-deep:    #1F333A;   /* high contrast deep slate */
+  --amber:         #C7801A;   /* due-today / modified */
+  --amber-bg:      #FBF0DD;
+  --green:         #2E7D5B;   /* pass / completed */
+  --green-bg:      #E4F3EA;
+  --red:           #B8493D;   /* fail / overdue */
+  --red-bg:        #FBE9E6;
+  --blue:          #3D6FA6;   /* future / entry */
+  --blue-bg:       #E6EEF7;
+  --purple:        #7C5CA6;   /* export / system */
+  --purple-bg:     #F3EEF9;
+
+  --radius: 12px;
+  --radius-sm: 8px;
+  --shadow: 0 2px 4px rgba(30,42,40,0.04), 0 6px 20px rgba(30,42,40,0.07);
+
+  --font-display: 'Archivo Expanded', sans-serif;
+  --font-body: 'Inter', sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+}
+
+*{ box-sizing: border-box; }
+html{ scroll-behavior: smooth; }
+body{
+  margin:0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 14.5px;
+  line-height: 1.5;
+  -webkit-tap-highlight-color: transparent;
+}
+h1,h2,h3,h4{ font-family: var(--font-display); letter-spacing: 0.01em; margin: 0; color: var(--slate-deep); }
+button{ font-family: var(--font-body); cursor: pointer; touch-action: manipulation; }
+input, select, textarea{ font-family: var(--font-body); }
+a{ color: var(--slate); text-decoration: none; }
+
+/* ===================== LAYOUT SHELL ===================== */
+.app-shell{ display:flex; min-height:100vh; padding-bottom: 56px; }
+
+/* ---- Sidebar nav ---- */
+.sidebar{
+  width: 240px;
+  flex-shrink:0;
+  background: var(--slate-deep);
+  color: #EAF0EE;
+  display:flex; flex-direction:column;
+  position: sticky; top:0; height:100vh;
+  z-index: 100;
+}
+.brand{
+  padding: 22px 20px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+.brand .plant{ font-family: var(--font-display); font-weight:800; font-size:16.5px; letter-spacing:0.02em; color:#fff; }
+.brand .sub{ font-size:11px; color:#9FB6B0; margin-top:4px; letter-spacing:0.05em; text-transform:uppercase; font-weight:500; }
+
+.navlist{ list-style:none; margin:0; padding: 12px 10px; flex:1; overflow-y:auto; }
+.navlist li{ margin-bottom:4px; }
+.navlist button{
+  width:100%; text-align:left;
+  background:none; border:none;
+  color:#C7D6D2;
+  padding: 12px 14px;
+  min-height: 46px;
+  border-radius: var(--radius-sm);
+  font-size:14px; font-weight:500;
+  display:flex; align-items:center; gap:12px;
+  transition: background .15s ease, color .15s ease;
+}
+.navlist button:hover{ background: rgba(255,255,255,0.1); color:#fff; }
+.navlist button.active{ background: #fff; color: var(--slate-deep); font-weight:700; box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
+.navlist .ic{ width:20px; text-align:center; flex-shrink:0; font-size:16px; }
+
+/* Sidebar User Badge */
+.sidebar-user{
+  padding: 14px 16px;
+  background: rgba(0,0,0,0.2);
+  border-top: 1px solid rgba(255,255,255,0.1);
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+}
+.sidebar-user .u-info{ font-size:12px; }
+.sidebar-user .u-label{ font-size:10px; color:#9FB6B0; text-transform:uppercase; letter-spacing:0.04em; }
+.sidebar-user .u-name{ font-weight:700; color:#fff; font-size:12px; font-family:var(--font-mono); }
+.sidebar-user button{
+  background: rgba(255,255,255,0.15); border:none; color:#fff; padding:8px 14px; min-height:36px; border-radius:6px; font-size:12px; font-weight:600;
+  transition: background .12s ease;
+}
+.sidebar-user button:hover{ background: rgba(255,255,255,0.3); }
+
+.sidebar-foot{
+  padding: 12px 16px 14px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  font-size:11px; color:#9FB6B0; line-height:1.4;
+}
+
+/* ---- Bottom Sticky User Bar ---- */
+.live-user-bar{
+  position: fixed; bottom: 0; left: 0; right: 0;
+  background: var(--slate-deep); color: #fff;
+  padding: 10px 20px; z-index: 800;
+  display: flex; align-items: center; justify-content: space-between;
+  border-top: 2px solid var(--slate);
+  box-shadow: 0 -2px 12px rgba(0,0,0,0.2);
+  font-size: 13px;
+  min-height: 48px;
+}
+.live-user-bar .user-indicator{ display:flex; align-items:center; gap:8px; }
+.live-user-bar .online-dot{ width:8px; height:8px; border-radius:50%; background:#2E7D5B; box-shadow: 0 0 6px #2E7D5B; }
+.live-user-bar strong{ font-family: var(--font-mono); color:#7FE0B8; font-size:14px; }
+.live-user-bar .btn-switch{
+  background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.35); color:#fff;
+  padding: 6px 14px; min-height: 36px; border-radius: 6px; font-size: 12.5px; font-weight:600;
+  transition: all .12s ease;
+}
+.live-user-bar .btn-switch:hover{ background: #fff; color: var(--slate-deep); }
+
+/* ---- Main content ---- */
+.main{ flex:1; min-width:0; padding: 28px 36px 60px; max-width:1400px; }
+.view{ display:none; }
+.view.active{ display:block; animation: fadein .25s ease; }
+#view-login{
+  min-height:85vh;
+  align-items:center;
+  justify-content:center;
+}
+#view-login.active{
+  display:flex;
+}
+@keyframes fadein{ from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:none;} }
+
+.page-head{ margin-bottom: 22px; }
+.page-head h1{ font-size: 24px; color: var(--slate-deep); }
+.page-head p{ color: var(--ink-soft); margin-top:4px; font-size:14px; }
+
+/* Mobile header bar */
+.mobile-topbar{
+  display:none;
+  background: var(--slate-deep); color:#fff;
+  padding: 12px 18px; align-items:center; justify-content:space-between;
+  position:sticky; top:0; z-index:110;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+}
+.mobile-topbar .brand-title{ font-family: var(--font-display); font-weight:800; font-size:14.5px; letter-spacing: 0.02em; }
+.mobile-topbar button{
+  background: rgba(255,255,255,0.18); border:1px solid rgba(255,255,255,0.35); color:#fff;
+  padding: 8px 14px; min-height: 40px; border-radius:6px; font-weight:600; font-size: 13px;
+}
+
+/* ===================== CARDS / SURFACES ===================== */
+.card{
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 22px 24px;
+}
+.card + .card{ margin-top:20px; }
+.card h3{ font-size:14px; color:var(--slate-deep); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:16px; font-weight:800; }
+
+.grid{ display:grid; gap:18px; }
+.grid-2{ grid-template-columns: 1fr 1fr; }
+.grid-3{ grid-template-columns: repeat(3,1fr); }
+.grid-4{ grid-template-columns: repeat(4,1fr); }
+
+/* 2-Column Responsive Layout for Testing Entry View */
+.testing-layout{
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 20px;
+  align-items: start;
+}
+
+.sidebar-list-container{
+  max-height: 600px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 960px){
+  .app-shell{ flex-direction:column; }
+  .mobile-topbar{ display:flex; }
+  .sidebar{
+    width:100%; height:auto; position:fixed; top:54px; left:0; right:0; bottom:0;
+    display:none; z-index:120; background: var(--slate-deep);
+    box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+  }
+  .sidebar.show{ display:flex; }
+  .main{ padding:16px 12px 60px; width:100%; max-width:100%; }
+  .grid-2, .grid-3, .grid-4, .testing-layout{ grid-template-columns:1fr; gap:14px; }
+  .card{ padding: 16px 14px; border-radius: var(--radius); }
+}
+
+/* ===================== KPI STRIP ===================== */
+.kpi-strip{ display:grid; grid-template-columns: repeat(6,1fr); gap:12px; margin-bottom:20px; }
+@media (max-width: 1200px){ .kpi-strip{ grid-template-columns: repeat(3,1fr);} }
+@media (max-width: 640px){ .kpi-strip{ grid-template-columns: repeat(2,1fr);} }
+.kpi{
+  background: var(--surface); border:1px solid var(--line); border-radius: var(--radius);
+  padding: 14px 16px; box-shadow: var(--shadow); transition: transform .15s ease, box-shadow .15s ease;
+}
+.kpi:hover{ transform: translateY(-2px); box-shadow: 0 6px 16px rgba(30,42,40,0.09); }
+.kpi .label{ font-size:11.5px; color:var(--slate-deep); text-transform:uppercase; letter-spacing:0.05em; font-weight:700; }
+.kpi .value{ font-family: var(--font-mono); font-size:22px; font-weight:700; color:var(--slate-deep); margin-top:4px;}
+.kpi .value.warn{ color:var(--red); }
+.kpi .value.good{ color:var(--green); }
+.kpi .value.amber{ color:var(--amber); }
+
+/* ===================== FORMS & TOUCH INPUTS ===================== */
+label{ display:block; font-size:13px; font-weight:700; color:var(--slate-deep); margin-bottom:6px; }
+.field{ margin-bottom:16px; }
+input[type=text], input[type=number], input[type=date], input[type=time], input[type=password], select, textarea{
+  width:100%; padding:12px 14px; min-height:48px;
+  border:1px solid var(--line); border-radius: var(--radius-sm);
+  background:#fff; color:var(--ink); font-size:16px; /* 16px prevents iOS viewport auto-zoom */
+  transition: border-color .12s ease, box-shadow .12s ease;
+}
+input:focus, select:focus, textarea:focus{
+  outline:none; border-color: var(--slate); box-shadow: 0 0 0 3px rgba(60,90,99,0.18);
+}
+textarea{ resize:vertical; min-height:80px; }
+.hint{ font-size:12px; color:var(--ink-soft); margin-top:4px; }
+.readonly-field{
+  background: var(--surface-sunk); border:1px dashed var(--line-dark);
+  padding:12px 14px; border-radius:var(--radius-sm); font-size:15px; color:var(--ink);
+  font-family: var(--font-mono); font-weight:600; min-height:48px; display:flex; align-items:center;
+}
+
+/* ===================== TOUCH BUTTONS ===================== */
+.btn{
+  display:inline-flex; align-items:center; justify-content:center; gap:8px;
+  padding: 12px 20px; min-height: 48px; border-radius: var(--radius-sm);
+  border:1px solid transparent; font-size:14.5px; font-weight:700;
+  transition: all .12s ease; user-select:none; touch-action: manipulation;
+}
+.btn-primary{ background: var(--slate); color:#fff; }
+.btn-primary:hover{ background: var(--slate-deep); box-shadow: 0 4px 12px rgba(31,51,58,0.3); }
+.btn-ghost{ background:transparent; border-color: var(--line-dark); color: var(--ink); }
+.btn-ghost:hover{ background: var(--surface-sunk); border-color: var(--slate); }
+.btn-danger{ background: var(--red-bg); color: var(--red); border-color: rgba(184,73,61,0.25); }
+.btn-danger:hover{ background:#F5D9D5; }
+.btn-sm{ padding:8px 14px; min-height: 38px; font-size:13px; }
+.btn-row{ display:flex; gap:12px; margin-top:20px; flex-wrap:wrap; }
+
+@media (max-width: 640px){
+  .btn-row, .search-row{ flex-direction: column; align-items: stretch; width: 100%; }
+  .btn-row .btn, .search-row input, .search-row select, .search-row .btn{ width: 100%; min-height: 48px; }
+}
+
+/* ===================== TABLE & SCROLLABLE WRAPPERS ===================== */
+.table-wrap, .table-responsive{
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: 60vh;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fff;
+  -webkit-overflow-scrolling: touch;
+}
+.home-table-wrap{
+  max-height: 350px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: #fff;
+  -webkit-overflow-scrolling: touch;
+}
+table{ width:100%; border-collapse:collapse; font-size:13.5px; background:#fff; }
+th, td{ padding:12px 14px; text-align:left; border-bottom:1px solid var(--line); white-space:nowrap; }
+th{ background: var(--surface-sunk); color:var(--slate-deep); font-weight:700; font-size:12px; text-transform:uppercase; letter-spacing:0.04em; position:sticky; top:0; z-index:10; box-shadow: 0 1px 0 var(--line); }
+tbody tr:hover{ background: #F8FAF9; }
+td.mono{ font-family: var(--font-mono); font-size:13px; }
+
+/* Clickable Tracking Number Link */
+.tn-link{
+  color: var(--slate);
+  font-weight: 700;
+  text-decoration: none;
+  font-family: var(--font-mono);
+  transition: color 0.12s ease;
+  padding: 4px 0;
+  display: inline-block;
+}
+.tn-link:hover{
+  text-decoration: underline;
+  color: var(--slate-deep);
+}
+
+.badge{
+  display:inline-block; padding:4px 10px; border-radius:20px; font-size:12px; font-weight:700; letter-spacing:0.02em;
+}
+.badge-green{ background:var(--green-bg); color:var(--green); }
+.badge-amber{ background:var(--amber-bg); color:var(--amber); }
+.badge-red{ background:var(--red-bg); color:var(--red); }
+.badge-blue{ background:var(--blue-bg); color:var(--blue); }
+.badge-purple{ background:var(--purple-bg); color:var(--purple); }
+.badge-grey{ background:var(--surface-sunk); color:var(--ink-soft); }
+
+.search-row{ display:flex; gap:12px; margin-bottom:18px; flex-wrap:wrap; align-items:center; }
+.search-row input{ flex:1; min-width:180px; }
+
+.empty-state{
+  text-align:center; padding: 44px 20px; color:var(--ink-soft);
+}
+.empty-state .ic{ font-size:32px; margin-bottom:8px; opacity:0.5; }
+
+/* Non-Destructive Chart Fallback UI Overlay */
+.chart-fallback{
+  padding:30px 20px;
+  text-align:center;
+  color:var(--ink-soft);
+  font-size:13.5px;
+  background:var(--surface-sunk);
+  border-radius:var(--radius-sm);
+  line-height:1.5;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  min-height:180px;
+}
+
+/* ===================== HERO SIGNATURE ELEMENT ===================== */
+.hero{
+  background: linear-gradient(135deg, var(--slate-deep), var(--slate));
+  border-radius: var(--radius);
+  padding: 28px 32px;
+  color:#fff;
+  margin-bottom:20px;
+  display:flex; align-items:center; justify-content:space-between; gap:24px;
+  overflow:hidden; position:relative;
+  box-shadow: 0 6px 24px rgba(31,51,58,0.2);
+}
+.hero-text h1{ color:#fff; font-size:25px; line-height:1.2; }
+.hero-text p{ color:#C7D6D2; margin-top:8px; font-size:14px; max-width:500px; line-height:1.45; }
+.hero-curve{ width:260px; flex-shrink:0; }
+@media (max-width:900px){ .hero{flex-direction:column; align-items:flex-start;} .hero-curve{width:100%; max-width:300px;} }
+
+.curve-label{ font-size:10.5px; fill:#9FB6B0; font-family: var(--font-mono); }
+
+/* ===================== REPORT PRINT VIEW & OFFICIAL LETTERHEAD ===================== */
+.report-sheet{
+  background:#fff; border:1px solid var(--line); border-radius:var(--radius);
+  padding:36px 40px 48px; max-width:840px; margin: 0 auto; box-shadow: var(--shadow);
+  position: relative; min-height: 500px;
+}
+
+.report-print-stamp{
+  position: absolute;
+  bottom: 8px; right: 12px;
+  font-size: 4px;
+  font-family: var(--font-mono);
+  color: #555;
+  text-align: right;
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+
+@media print{
+  .sidebar, .mobile-topbar, .no-print, .kpi-strip, .search-row, .page-head p, .live-user-bar{ display:none !important; }
+  body{ background:#fff; color:#000; margin: 0; padding: 0; }
+  .main{ padding:0; max-width:none; }
+  .report-sheet{ border:none; box-shadow:none; padding:0; min-height:0; position:relative; }
+  .badge{ border:1px solid #ccc; background:none !important; color:#000 !important; }
+  
+  .report-print-stamp{
+    display: block !important;
+    font-size: 4px !important;
+    position: fixed !important;
+    bottom: 3mm !important;
+    right: 4mm !important;
+    color: #333 !important;
+    font-family: 'IBM Plex Mono', monospace !important;
+  }
+}
+
+/* Toast */
+#toast{
+  position:fixed; bottom:64px; right:24px;
+  background: var(--slate-deep); color:#fff;
+  padding:14px 22px; border-radius:var(--radius-sm);
+  font-size:14px; font-weight:600; box-shadow:0 6px 20px rgba(0,0,0,0.25);
+  opacity:0; transform:translateY(10px); pointer-events:none;
+  transition: all .25s ease; z-index:999;
+}
+#toast.show{ opacity:1; transform:none; }
+
+.modal-backdrop{
+  position:fixed; inset:0; background:rgba(30,42,40,0.65);
+  display:none; align-items:center; justify-content:center; z-index:900; padding:16px;
+  backdrop-filter: blur(4px);
+}
+.modal-backdrop.show{ display:flex; }
+.modal{ background:#fff; border-radius:var(--radius); padding:26px 28px; max-width:500px; width:100%; box-shadow:0 14px 40px rgba(0,0,0,0.3); }
+.modal h3{ margin-bottom:10px; color:var(--slate-deep); font-size:16.5px; }
+.modal p{ color:var(--ink-soft); font-size:14px; margin-bottom:20px; line-height:1.5; }
+</style>
+</head>
+<body>
+
+<!-- Mobile Header -->
+<div class="mobile-topbar" id="mobile-topbar" style="display:none;">
+  <div class="brand-title">APURA RMC PLANT — CUBE QC</div>
+  <button onclick="toggleMobileNav()">Menu</button>
+</div>
+
+<div class="app-shell">
+
+  <!-- ===================== SIDEBAR ===================== -->
+  <nav class="sidebar" id="sidebar" style="display:none;">
+    <div class="brand">
+      <div class="plant">APURA RMC PLANT</div>
+      <div class="sub">Cube QC System</div>
+    </div>
+    <ul class="navlist" id="navlist">
+      <li><button data-view="home" class="active"><span class="ic">&#8962;</span> Home</button></li>
+      <li><button data-view="entry"><span class="ic">&#43;</span> New Cube Entry</button></li>
+      <li><button data-view="recall"><span class="ic">&#8635;</span> Recall Record</button></li>
+      <li><button data-view="testing"><span class="ic">&#9881;</span> Testing Entry</button></li>
+      <li><button data-view="schedule"><span class="ic">&#128197;</span> Testing Schedule</button></li>
+      <li><button data-view="dashboard"><span class="ic">&#9776;</span> Dashboard</button></li>
+      <li><button data-view="reports"><span class="ic">&#128196;</span> Reports</button></li>
+      <li><button data-view="daily"><span class="ic">&#128202;</span> Daily Production Report</button></li>
+      <li><button data-view="master"><span class="ic">&#8801;</span> Master Database</button></li>
+      <li><button data-view="activity"><span class="ic">&#128221;</span> Activity Log</button></li>
+      <li id="nav-warnings-li" style="display:none;"><button data-view="warnings"><span class="ic">&#9888;</span> Warning Alerts <span id="badge-warning-count" class="badge badge-red" style="font-size:10px; margin-left:auto; display:none;">0</span></button></li>
+      <li id="nav-users-li" style="display:none;"><button data-view="users"><span class="ic">&#128100;</span> User Management</button></li>
+    </ul>
+
+    <!-- Sidebar Active User Badge & Logout Button -->
+    <div class="sidebar-user">
+      <div class="u-info">
+        <div class="u-label">Active Session</div>
+        <div class="u-name" id="sidebar-user-name">Not Logged In</div>
+      </div>
+      <button onclick="logout()" title="Logout User">Logout</button>
+    </div>
+
+    <div class="sidebar-foot">
+      BS EN 12390 Compliant<br>
+      Local browser storage · CDN build
+    </div>
+  </nav>
+
+  <!-- ===================== MAIN ===================== -->
+  <main class="main" id="main-content">
+
+    <!-- ============ LOGIN VIEW (FULL PAGE SCREEN) ============ -->
+    <section class="view active" id="view-login">
+      <div class="card" style="max-width:420px; width:100%; margin:40px auto; padding:32px 28px; box-shadow:var(--shadow);">
+        <div style="text-align:center; margin-bottom:24px;">
+          <div style="font-family:var(--font-display); font-weight:800; font-size:22px; color:var(--slate-deep);">APURA RMC PLANT</div>
+          <div style="font-size:13px; color:var(--ink-soft); margin-top:4px;">Concrete Cube Quality Control System</div>
+          <div style="display:inline-block; margin-top:10px; padding:3px 10px; background:var(--surface-sunk); border-radius:20px; font-size:11px; font-weight:700; color:var(--slate);">BS EN 12390 COMPLIANT</div>
+        </div>
+
+        <div class="field">
+          <label>Username *</label>
+          <input type="text" id="login-username-input" placeholder="Enter username (e.g. admin)" onkeydown="if(event.key==='Enter') login()">
+        </div>
+
+        <div class="field">
+          <label>Password *</label>
+          <input type="password" id="login-password-input" placeholder="Enter password (e.g. 123)" onkeydown="if(event.key==='Enter') login()">
+        </div>
+
+        <div id="login-error-msg" style="color:var(--red); font-size:12.5px; font-weight:600; margin-bottom:14px; display:none;"></div>
+
+        <div class="btn-row" style="margin-top:22px;">
+          <button class="btn btn-primary" style="width:100%; padding:12px;" onclick="login()">Sign In &amp; Start Session</button>
+        </div>
+
+        <div style="margin-top:20px; font-size:11.5px; color:var(--ink-soft); text-align:center; line-height:1.4;">
+          Default Admin Account: <strong>admin</strong> / <strong>123</strong><br>
+          Role-Based Access Control (RBAC) Active
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ HOME ============ -->
+    <section class="view" id="view-home">
+      <div class="hero">
+        <div class="hero-text">
+          <h1>Concrete Cube Quality Control</h1>
+          <p>Cast, schedule, test, and report compressive strength results in strict compliance with BS EN 12390 — tracking 3/7/14/28-day strength development.</p>
+          <div class="btn-row">
+            <button class="btn btn-primary" style="background:#fff;color:var(--slate-deep)" onclick="showView('entry')">+ New Cube Entry</button>
+            <button class="btn" style="background:rgba(255,255,255,0.15);color:#fff" onclick="showView('testing')">&#9881; Record a Test</button>
+          </div>
+        </div>
+        <!-- Signature element: BS EN 12390 hydration curve vector graphic with Log Scale X-axis -->
+        <svg class="hero-curve" viewBox="0 0 260 140">
+          <text x="10" y="15" fill="#9FB6B0" font-size="9.5" font-family="var(--font-mono)">Strength (Y) vs Days (X - Log Scale)</text>
+          <polyline points="10,120 60,80 100,55 150,38 220,26" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" opacity="0.95"/>
+          <polyline points="10,120 60,80 100,55 150,38 220,26" fill="none" stroke="#7FE0B8" stroke-width="1" stroke-dasharray="3 3" opacity="0.5" transform="translate(0,-8)"/>
+          <circle cx="10" cy="120" r="3.5" fill="#fff"/><circle cx="60" cy="80" r="3.5" fill="#fff"/>
+          <circle cx="100" cy="55" r="3.5" fill="#fff"/><circle cx="150" cy="38" r="3.5" fill="#fff"/><circle cx="220" cy="26" r="3.5" fill="#fff"/>
+          <text x="6" y="135" class="curve-label">3d</text>
+          <text x="56" y="135" class="curve-label">7d</text>
+          <text x="94" y="135" class="curve-label">14d</text>
+          <text x="146" y="135" class="curve-label">28d</text>
+        </svg>
+      </div>
+
+      <div class="kpi-strip" id="home-kpis"></div>
+
+      <div class="grid grid-2">
+        <div class="card">
+          <h3>Recent Activity</h3>
+          <div id="home-recent" class="home-table-wrap"></div>
+        </div>
+        <div class="card">
+          <h3>Due This Week</h3>
+          <div id="home-due" class="home-table-wrap"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ CUBE ENTRY ============ -->
+    <section class="view" id="view-entry">
+      <div class="page-head">
+        <h1>New Cube Entry</h1>
+        <p>Record a new casting. A permanent tracking number is generated on save, and 3/7/14/28-day testing schedule rows are created automatically.</p>
+      </div>
+      <div class="card" style="max-width:780px;">
+        <div class="grid grid-2">
+          <div class="field"><label>Casting Date *</label><input type="date" id="f-castingDate"></div>
+          <div class="field"><label>Cast Time (optional)</label><input type="time" id="f-castTime"></div>
+          <div class="field"><label>Customer Name *</label><input type="text" id="f-customer" list="dl-customers" placeholder="e.g. SRI CONSTRUCTION"></div>
+          <div class="field"><label>Supply Site *</label><input type="text" id="f-site" list="dl-sites" placeholder="e.g. VIJAYAPURA"></div>
+          <div class="field"><label>Design Code *</label><input type="text" id="f-designCode" list="dl-designCodes" placeholder="e.g. AB/C25/64"></div>
+          <div class="field"><label>Grade *</label>
+            <select id="f-grade"><option value="">Select Grade…</option>
+              <option>C15</option><option>C20</option><option>C25</option><option>C30</option><option>C35A</option><option>C40</option><option>C50</option><option>Other</option>
+            </select>
+          </div>
+          <div class="field"><label>Slump *</label>
+            <select id="f-slump"><option value="">Select Slump…</option>
+              <option>150 mm</option><option>160 mm</option><option>165 mm</option><option>175 mm</option><option>200 mm</option><option>High</option>
+            </select>
+          </div>
+          <div class="field"><label>Cement Content (kg/m³) *</label><input type="number" id="f-cement" min="0" step="1" placeholder="e.g. 280"></div>
+          <div class="field"><label>Batch Volume (m³) *</label><input type="number" id="f-volume" min="0" step="0.01" placeholder="e.g. 22.75"></div>
+          <div class="field"><label>Weather *</label>
+            <select id="f-weather">
+              <option value="☀ Sunny">☀ Sunny</option>
+              <option value="☁ Cloudy">☁ Cloudy</option>
+              <option value="☂ Rainy">☂ Rainy</option>
+            </select>
+          </div>
+          <div class="field"><label>Cement Silo *</label>
+            <select id="f-silo"><option value="">Select Silo…</option><option>Silo 01</option><option>Silo 02</option></select>
+          </div>
+          <div class="field"><label>Bulk Number *</label><input type="text" id="f-bulk" list="dl-bulkNumbers" placeholder="e.g. BN-4527"></div>
+          <div class="field"><label>Casted By *</label>
+            <input type="text" id="f-castedBy" list="dl-castedBy" placeholder="Select or type Technician…">
+          </div>
+          <div class="field"><label>Number of Cubes * (1–20)</label><input type="number" id="f-numCubes" min="1" max="20" value="4"></div>
+        </div>
+        
+        <div class="field" style="margin-top:12px; margin-bottom:14px; padding:12px 14px; background:var(--surface-sunk); border-radius:var(--radius-sm); border:1px solid var(--line);">
+          <label style="font-weight:700; color:var(--slate-deep); margin-bottom:8px; display:block;">Planned Testing Intervals *</label>
+          <div style="display:flex; flex-wrap:wrap; gap:16px; align-items:center;">
+            <label style="display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:600; cursor:pointer;">
+              <input type="checkbox" id="f-age-3d" value="3 Days" checked> 3 Days (Early Gain)
+            </label>
+            <label style="display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:600; cursor:pointer;">
+              <input type="checkbox" id="f-age-7d" value="7 Days" checked> 7 Days (Hydration)
+            </label>
+            <label style="display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:600; cursor:pointer;">
+              <input type="checkbox" id="f-age-14d" value="14 Days" checked> 14 Days (Intermediate)
+            </label>
+            <label style="display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:600; cursor:pointer;">
+              <input type="checkbox" id="f-age-28d" value="28 Days" checked> 28 Days (Characteristic Strength)
+            </label>
+          </div>
+          <div style="font-size:11px; color:var(--text-subtle); margin-top:6px;">Unchecked intervals will be excluded from testing schedule alerts for this batch.</div>
+        </div>
+
+        <div class="field"><label>Remarks</label><textarea id="f-remarks" placeholder="Optional notes regarding batching, ambient temperature, or site condition"></textarea></div>
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="saveCubeEntry()">Save Record</button>
+          <button class="btn btn-ghost btn-clear-form" onclick="clearEntryForm()">Clear Form</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ RECALL ============ -->
+    <section class="view" id="view-recall">
+      <div class="page-head">
+        <h1>Recall Record</h1>
+        <p>Look up a casting by Tracking Number. Site, Grade, Slump, Cement Content, Silo, Bulk Number and Remarks can be edited by Admins — Tracking Number and Casting Date are permanently fixed.</p>
+      </div>
+      <div class="card" style="max-width:820px;">
+        <div class="search-row">
+          <input type="text" id="recall-search" placeholder="Enter Tracking Number, e.g. TKC-000001">
+          <button class="btn btn-primary" onclick="recallRecord()">Recall</button>
+        </div>
+        <div id="recall-body" style="display:none;">
+          <div class="grid grid-2">
+            <div class="field"><label>Tracking Number (Fixed)</label><div class="readonly-field" id="rc-tn"></div></div>
+            <div class="field"><label>Casting Date (Fixed)</label><div class="readonly-field" id="rc-date"></div></div>
+            <div class="field"><label>Design Code (Fixed)</label><div class="readonly-field" id="rc-design"></div></div>
+            <div class="field"><label>Casted By (Fixed)</label><div class="readonly-field" id="rc-castedby"></div></div>
+            <div class="field"><label>Number of Cubes (Fixed)</label><div class="readonly-field" id="rc-numcubes"></div></div>
+            <div class="field"><label>Current Status</label><div class="readonly-field" id="rc-status"></div></div>
+          </div>
+          <hr style="border:none;border-top:1px solid var(--line);margin:16px 0;">
+          <div class="grid grid-2">
+            <div class="field"><label>Customer Name *</label><input type="text" id="rc-e-customer" list="dl-customers"></div>
+            <div class="field"><label>Supply Site *</label><input type="text" id="rc-e-site" list="dl-sites"></div>
+            <div class="field"><label>Batch Volume (m³) *</label><input type="number" id="rc-e-volume" min="0" step="0.01"></div>
+            <div class="field"><label>Weather *</label>
+              <select id="rc-e-weather">
+                <option value="☀ Sunny">☀ Sunny</option>
+                <option value="☁ Cloudy">☁ Cloudy</option>
+                <option value="☂ Rainy">☂ Rainy</option>
+              </select>
+            </div>
+            <div class="field"><label>Grade *</label>
+              <select id="rc-e-grade"><option>C15</option><option>C20</option><option>C25</option><option>C30</option><option>C35A</option><option>C40</option><option>C50</option><option>Other</option></select>
+            </div>
+            <div class="field"><label>Slump *</label>
+              <select id="rc-e-slump"><option>150 mm</option><option>160 mm</option><option>165 mm</option><option>175 mm</option><option>200 mm</option><option>High</option></select>
+            </div>
+            <div class="field"><label>Cement Content (kg/m³) *</label><input type="number" id="rc-e-cement" min="0"></div>
+            <div class="field"><label>Cement Silo *</label>
+              <select id="rc-e-silo"><option>Silo 01</option><option>Silo 02</option></select>
+            </div>
+            <div class="field"><label>Bulk Number *</label><input type="text" id="rc-e-bulk" list="dl-bulkNumbers"></div>
+          </div>
+
+          <div class="field" style="margin-top:12px; margin-bottom:14px; padding:12px 14px; background:var(--surface-sunk); border-radius:var(--radius-sm); border:1px solid var(--line);">
+            <label style="font-weight:700; color:var(--slate-deep); margin-bottom:8px; display:block;">Planned Testing Intervals *</label>
+            <div style="display:flex; flex-wrap:wrap; gap:16px; align-items:center;">
+              <label style="display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:600; cursor:pointer;">
+                <input type="checkbox" id="rc-age-3d" value="3 Days"> 3 Days
+              </label>
+              <label style="display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:600; cursor:pointer;">
+                <input type="checkbox" id="rc-age-7d" value="7 Days"> 7 Days
+              </label>
+              <label style="display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:600; cursor:pointer;">
+                <input type="checkbox" id="rc-age-14d" value="14 Days"> 14 Days
+              </label>
+              <label style="display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:600; cursor:pointer;">
+                <input type="checkbox" id="rc-age-28d" value="28 Days"> 28 Days
+              </label>
+            </div>
+          </div>
+
+          <div class="field"><label>Remarks</label><textarea id="rc-e-remarks"></textarea></div>
+          <div class="btn-row">
+            <button class="btn btn-primary" id="btn-update-record" onclick="updateRecord()">Update Record</button>
+            <button class="btn btn-ghost btn-clear-form" onclick="document.getElementById('recall-body').style.display='none'; if(document.getElementById('recall-tests-card')) document.getElementById('recall-tests-card').style.display='none'; document.getElementById('recall-search').value='';">Close View</button>
+          </div>
+        </div>
+
+        <!-- Card: Associated Test Results History -->
+        <div class="card" id="recall-tests-card" style="margin-top:18px; display:none;">
+          <h3>Associated Test Results History</h3>
+          <div class="table-wrap">
+            <table id="recall-tests-table">
+              <thead>
+                <tr>
+                  <th>Test ID</th>
+                  <th>Testing Age</th>
+                  <th>Testing Date</th>
+                  <th>Tested By</th>
+                  <th style="text-align:right;">Weight (kg)</th>
+                  <th style="text-align:right;">Load (kN)</th>
+                  <th style="text-align:right;">Strength (N/mm²)</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ TESTING ENTRY ============ -->
+    <section class="view" id="view-testing">
+      <div class="page-head">
+        <h1>Testing Entry</h1>
+        <p>Search a Tracking Number or select from pending tests, then record one or multiple cube samples with Load (kN) and Weight (kg). Age is auto-detected. Formula: Strength (N/mm²) = Load (kN) ÷ 22.5.</p>
+      </div>
+
+      <div class="testing-layout">
+        <!-- LEFT COLUMN: Search & Entry Form -->
+        <div class="card">
+          <div class="search-row">
+            <input type="text" id="test-search" placeholder="Enter Tracking Number, e.g. TKC-000001">
+            <button class="btn btn-primary" onclick="recallForTesting()">Recall</button>
+          </div>
+          <div id="testing-body" style="display:none;">
+            <!-- QC Test Age Reminder Banner -->
+            <div id="tt-age-reminder-banner" style="margin-bottom:16px; padding:10px 14px; background:var(--surface-sunk); border:1px solid var(--line); border-radius:var(--radius-sm); font-size:12.5px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
+              <div style="font-weight:700; color:var(--slate-deep); display:flex; align-items:center; gap:6px;">
+                <span>&#128221;</span> <span>QC Test Age Schedule Status:</span>
+              </div>
+              <div id="tt-age-badges" style="display:flex; gap:8px; flex-wrap:wrap;"></div>
+            </div>
+
+            <!-- Expanded Complete Batch Metadata Grid -->
+            <div class="grid grid-4">
+              <div class="field"><label>Tracking Number</label><div class="readonly-field" id="tt-tn"></div></div>
+              <div class="field"><label>Casting Date</label><div class="readonly-field" id="tt-date"></div></div>
+              <div class="field"><label>Customer Name</label><div class="readonly-field" id="tt-customer"></div></div>
+              <div class="field"><label>Supply Site</label><div class="readonly-field" id="tt-site"></div></div>
+
+              <div class="field"><label>Batch Volume (m³)</label><div class="readonly-field" id="tt-volume"></div></div>
+              <div class="field"><label>Weather</label><div class="readonly-field" id="tt-weather"></div></div>
+              <div class="field"><label>Design Code</label><div class="readonly-field" id="tt-design"></div></div>
+              <div class="field"><label>Grade Target</label><div class="readonly-field" id="tt-grade"></div></div>
+
+              <div class="field"><label>Slump</label><div class="readonly-field" id="tt-slump"></div></div>
+              <div class="field"><label>Cement Content (kg/m³)</label><div class="readonly-field" id="tt-cement"></div></div>
+              <div class="field"><label>Cement Silo</label><div class="readonly-field" id="tt-silo"></div></div>
+              <div class="field"><label>Bulk Number</label><div class="readonly-field" id="tt-bulk"></div></div>
+
+              <div class="field"><label>Casted By</label><div class="readonly-field" id="tt-castedby"></div></div>
+              <div class="field"><label>Tests Completed</label><div class="readonly-field" id="tt-completed"></div></div>
+            </div>
+            <hr style="border:none;border-top:1px solid var(--line);margin:16px 0;">
+            <div class="grid grid-2">
+              <div class="field"><label>Testing Date *</label><input type="date" id="tt-e-date"></div>
+              <div class="field"><label>Tested By *</label>
+                <input type="text" id="tt-e-testedby" list="dl-testedBy" placeholder="Select or type Technician…">
+              </div>
+              <div class="field"><label>Cube Size (mm)</label><input type="number" id="tt-e-cubesize" value="150"></div>
+            </div>
+
+            <!-- Multiple Sample Load & Weight Container -->
+            <div class="field" style="margin-top:6px;">
+              <label>Cube Samples — Failure Load (kN) &amp; Weight (kg) *</label>
+              <div id="load-inputs-container">
+                <div class="load-input-row" style="display:flex;gap:10px;margin-bottom:8px;align-items:center;">
+                  <input type="number" class="tt-e-load-item" min="0" step="0.01" placeholder="Sample 1 Load (kN), e.g. 742.5" oninput="updateTestPreview()" style="flex:1;">
+                  <input type="number" class="tt-e-weight-item" min="0" step="0.01" placeholder="Weight (kg), e.g. 8.25" style="width:160px;">
+                </div>
+              </div>
+              <button type="button" class="btn btn-ghost btn-sm" style="margin-top:4px;" onclick="addSampleLoadField()">+ Add Another Sample</button>
+            </div>
+
+            <div class="field">
+              <label>Detected Age & Live Calculated Average Strength</label>
+              <div class="readonly-field" id="tt-preview" style="color:var(--slate-deep); font-weight:700;">—</div>
+            </div>
+            <div class="btn-row">
+              <button class="btn btn-primary" onclick="saveTestResult()">Save Test Result</button>
+              <button class="btn btn-ghost btn-clear-form" onclick="resetTestingEntryForm()">Clear Form</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- RIGHT COLUMN: Pending & Overdue Tests Card -->
+        <div class="card">
+          <h3>Pending &amp; Overdue Tests</h3>
+          <div class="sidebar-list-container" id="testing-sidebar-container">
+            <table id="testing-sidebar-table">
+              <thead>
+                <tr>
+                  <th>Tracking No.</th>
+                  <th>Age</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ TESTING SCHEDULE ============ -->
+    <section class="view" id="view-schedule">
+      <div class="page-head">
+        <h1>Testing Schedule</h1>
+        <p>Filterable view of all 3/7/14/28-day due dates for every cast batch, with status color coding.</p>
+      </div>
+      <div class="card">
+        <div class="search-row">
+          <input type="text" id="sched-filter" placeholder="Filter by Tracking Number, Site, or Grade…" oninput="renderSchedule()">
+          <select id="sched-status-filter" onchange="renderSchedule()" style="max-width:200px;">
+            <option value="">All Statuses</option>
+            <option>Completed</option><option>Overdue</option><option>Due Today</option><option>Future</option>
+          </select>
+        </div>
+        <div class="table-wrap"><table id="schedule-table"><thead></thead><tbody></tbody></table></div>
+      </div>
+    </section>
+
+    <!-- ============ DASHBOARD ============ -->
+    <section class="view" id="view-dashboard">
+      <div class="page-head">
+        <h1>QC Dashboard</h1>
+        <p>Live KPIs and BS EN 12390-oriented statistical charts across all active castings and laboratory tests.</p>
+      </div>
+
+      <!-- Real-time Dashboard Filter Bar -->
+      <div class="card" style="margin-bottom:20px;">
+        <div class="search-row" style="margin:0;">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <label style="margin:0;white-space:nowrap;">From:</label>
+            <input type="date" id="dash-start" style="max-width:150px;" onchange="renderDashboard()">
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <label style="margin:0;white-space:nowrap;">To:</label>
+            <input type="date" id="dash-end" style="max-width:150px;" onchange="renderDashboard()">
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <label style="margin:0;white-space:nowrap;">Grade:</label>
+            <select id="dash-grade" style="max-width:140px;" onchange="renderDashboard()">
+              <option value="">All Grades</option>
+            </select>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <label style="margin:0;white-space:nowrap;">Customer:</label>
+            <select id="dash-customer" style="max-width:180px;" onchange="renderDashboard()">
+              <option value="">All Customers</option>
+            </select>
+          </div>
+          <button class="btn btn-ghost" onclick="clearDashboardFilters()">Clear Filters</button>
+        </div>
+      </div>
+
+      <!-- Engineering QC & Statistical Summary Tables -->
+      <div class="grid grid-2" style="margin-bottom:20px;">
+        <!-- Card 1: Age-wise Strength Development (Hydration Analysis) -->
+        <div class="card">
+          <h3>Age-wise Strength Development (Hydration Analysis)</h3>
+          <div class="table-wrap" style="max-height:300px;">
+            <table id="dash-tbl-age">
+              <thead>
+                <tr>
+                  <th>Age Target</th>
+                  <th style="text-align:right;">Samples</th>
+                  <th style="text-align:right;">Avg Strength</th>
+                  <th style="text-align:right;">Min</th>
+                  <th style="text-align:right;">Max</th>
+                  <th>Compliance Status</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Card 2: Grade-wise Performance Summary -->
+        <div class="card">
+          <h3>Grade-wise Performance Summary</h3>
+          <div class="table-wrap" style="max-height:300px;">
+            <table id="dash-tbl-grade">
+              <thead>
+                <tr>
+                  <th>Concrete Grade</th>
+                  <th style="text-align:right;">Target</th>
+                  <th style="text-align:right;">Tested Batches</th>
+                  <th style="text-align:right;">Avg 28d Strength</th>
+                  <th>Pass % / Fail %</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 3: Technician & Laboratory Testing Breakdown -->
+      <div class="card" style="margin-bottom:20px;">
+        <h3>Technician &amp; Laboratory Testing Breakdown</h3>
+        <div class="table-wrap" style="max-height:280px;">
+          <table id="dash-tbl-tech">
+            <thead>
+              <tr>
+                <th>Tested By (QC / Tech)</th>
+                <th style="text-align:right;">Total Tests Carried Out</th>
+                <th style="text-align:right;">Average Strength Recorded</th>
+                <th>Performance Status</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card" style="margin-top:18px;">
+        <h3>Engineering Interpretation (BS EN 12390)</h3>
+        <p id="dash-interpretation" style="font-size:14px;color:var(--ink-soft);line-height:1.55;"></p>
+      </div>
+    </section>
+
+    <!-- ============ REPORTS ============ -->
+    <section class="view" id="view-reports">
+      <div class="page-head">
+        <h1>Reports</h1>
+        <p>Generate Tokyo Super Mix Official Concrete Test Reports or Monthly Concrete Summary Reports.</p>
+      </div>
+      <div class="card no-print" style="max-width:780px;">
+        <div class="grid grid-2">
+          <div>
+            <h3>Individual Cube Report</h3>
+            <div class="field">
+              <label>Customer Name (Filter)</label>
+              <input type="text" id="rep-customer" list="dl-customers" placeholder="Select or type Customer to filter…" oninput="filterReportTrackingNumbers()" onchange="filterReportTrackingNumbers()">
+            </div>
+            <div class="field">
+              <label>Tracking Number *</label>
+              <select id="rep-tn">
+                <option value="">Select Tracking Number…</option>
+              </select>
+            </div>
+            <div class="field"><label>Testing Age to Report</label>
+              <select id="rep-age">
+                <option value="All Ages">All Ages</option>
+                <option value="3 Days">3 Days</option>
+                <option value="7 Days">7 Days</option>
+                <option value="14 Days">14 Days</option>
+                <option value="28 Days">28 Days</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <button class="btn btn-primary" onclick="generateCubeReport()">Generate Cube Report</button>
+          </div>
+          <div>
+            <h3>Monthly Summary Report</h3>
+            <div class="field"><label>Select Date within Month</label><input type="date" id="rep-month"></div>
+            <button class="btn btn-primary" onclick="generateMonthlyReport()">Generate Monthly Report</button>
+          </div>
+        </div>
+      </div>
+      <div id="report-output" style="margin-top:20px;"></div>
+    </section>
+
+    <!-- ============ DAILY PRODUCTION & QA REPORT ============ -->
+    <section class="view" id="view-daily">
+      <div class="page-head">
+        <h1>Daily Production &amp; QA Report</h1>
+        <p>Comprehensive plant production log detailing customer, site location, batch volume, weather, and mature strength results.</p>
+      </div>
+      <div class="card">
+        <div class="search-row">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <label style="margin:0;white-space:nowrap;">From:</label>
+            <input type="date" id="daily-start" style="max-width:160px;" onchange="renderDailyReport()">
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <label style="margin:0;white-space:nowrap;">To:</label>
+            <input type="date" id="daily-end" style="max-width:160px;" onchange="renderDailyReport()">
+          </div>
+          <button class="btn btn-primary" onclick="renderDailyReport()">Filter Report</button>
+          <button class="btn btn-ghost" onclick="document.getElementById('daily-start').value=''; document.getElementById('daily-end').value=''; renderDailyReport();">Reset Dates</button>
+          <button class="btn btn-primary" style="margin-left:auto;" onclick="exportDailyExcel()">⬇ Export to Excel (.xlsx)</button>
+        </div>
+        <div class="table-wrap">
+          <table id="daily-table">
+            <thead>
+              <tr>
+                <th>No</th>
+                <th>Casting Date</th>
+                <th>Customer</th>
+                <th>Site Location</th>
+                <th>Weather</th>
+                <th>Grade</th>
+                <th>Design Code</th>
+                <th>Cement (kg)</th>
+                <th>Volume (m³)</th>
+                <th>7Day Date</th>
+                <th>7Day Strength (N/mm²)</th>
+                <th>28Day Date</th>
+                <th>28Day Strength (N/mm²)</th>
+                <th>Slump</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ MASTER DATABASE ============ -->
+    <section class="view" id="view-master">
+      <div class="page-head">
+        <h1>Master Database</h1>
+        <p>Complete searchable record of every casting. Export directly to Excel (.xlsx) or back up/restore as JSON.</p>
+      </div>
+      <div class="card">
+        <div class="search-row">
+          <input type="text" id="master-filter" placeholder="Search Tracking Number, Customer, Site, Grade, Design Code…" oninput="renderMaster()">
+          <button class="btn btn-primary" onclick="exportExcel()">⬇ Export Excel (.xlsx)</button>
+          <button class="btn btn-ghost" id="btn-backup-json" onclick="exportJSON()">⬇ Backup (JSON)</button>
+          <button class="btn btn-ghost" id="btn-restore-json" onclick="document.getElementById('restore-file').click()">⬆ Restore (JSON)</button>
+          <button class="btn btn-danger btn-sm" id="btn-reset-data" style="margin-left:auto;" onclick="confirmResetData()" title="Admin only">Reset All Data</button>
+          <input type="file" id="restore-file" accept=".json" style="display:none" onchange="importJSON(event)">
+        </div>
+        <div class="table-wrap"><table id="master-table"><thead></thead><tbody></tbody></table></div>
+      </div>
+    </section>
+
+    <!-- ============ ACTIVITY LOG ============ -->
+    <section class="view" id="view-activity">
+      <div class="page-head">
+        <h1>Activity Log</h1>
+        <p>Audit trail recording all user activity: casting creations, record updates, test entries, and data exports.</p>
+      </div>
+      <div class="card">
+        <div class="search-row">
+          <input type="text" id="activity-filter" placeholder="Search Activity Log by Tracking No, User, or Keyword…" oninput="renderActivityLog()">
+          <select id="activity-type-filter" onchange="renderActivityLog()" style="max-width:220px;">
+            <option value="">All Action Types</option>
+            <option>New Entry</option>
+            <option>Test Recorded</option>
+            <option>Record Updated</option>
+            <option>Record Deleted</option>
+            <option>User Login</option>
+            <option>User Logout</option>
+            <option>User Created</option>
+            <option>User Updated</option>
+            <option>User Deleted</option>
+            <option>Excel Export</option>
+            <option>Backup Download</option>
+            <option>Backup Restore</option>
+            <option>Data Reset</option>
+          </select>
+          <button class="btn btn-danger btn-sm" id="btn-clear-activity" style="margin-left:auto;" onclick="confirmClearActivityLog()" title="Admin only">Clear Log</button>
+        </div>
+        <div class="table-wrap"><table id="activity-table"><thead></thead><tbody></tbody></table></div>
+      </div>
+    </section>
+
+    <!-- ============ USER MANAGEMENT (ADMIN ONLY) ============ -->
+    <section class="view" id="view-users">
+      <div class="page-head">
+        <h1>User Management</h1>
+        <p>Manage user accounts and access roles (Admin / Operator). Only Admins can create, edit, or delete users.</p>
+      </div>
+
+      <div class="grid grid-2">
+        <!-- LEFT COLUMN: Form -->
+        <div class="card">
+          <h3 id="um-form-title">Add New User</h3>
+          <input type="hidden" id="um-editing-username" value="">
+          <div class="field">
+            <label>Username *</label>
+            <input type="text" id="um-username" placeholder="e.g. technician1">
+          </div>
+          <div class="field">
+            <label>Password *</label>
+            <input type="text" id="um-password" placeholder="Set user password">
+          </div>
+          <div class="field">
+            <label>Access Role *</label>
+            <select id="um-role">
+              <option value="operator">Operator (QC Technician / Lab Helper)</option>
+              <option value="admin">Admin (Plant Quality Manager)</option>
+            </select>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="saveUser()">Save User</button>
+            <button class="btn btn-ghost" onclick="clearUserForm()">Cancel</button>
+          </div>
+        </div>
+
+        <!-- RIGHT COLUMN: User List Table -->
+        <div class="card">
+          <h3>Registered System Users</h3>
+          <div class="table-wrap">
+            <table id="users-table">
+              <thead>
+                <tr>
+                  <th>Username</th>
+                  <th>Role</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ WARNING ALERTS / SKIPPED LOGS (ADMIN ONLY) ============ -->
+    <section class="view" id="view-warnings">
+      <div class="page-head">
+        <h1>Warning Alerts &amp; Skipped Test Log</h1>
+        <p>Audit trail of all skipped cube tests and BS EN 12390 characteristic strength compliance deviations.</p>
+      </div>
+      <div class="card">
+        <div class="search-row">
+          <input type="text" id="warnings-filter" placeholder="Search by Tracking No, Customer, Site, User, or Reason…" oninput="renderWarnings()">
+          <select id="warnings-severity-filter" onchange="renderWarnings()" style="max-width:200px;">
+            <option value="">All Severities</option>
+            <option value="HIGH">High Risk (28-Day Skips)</option>
+            <option value="MODERATE">Moderate (3d/7d/14d Skips)</option>
+          </select>
+          <button class="btn btn-danger btn-sm" id="btn-clear-warnings" style="margin-left:auto;" onclick="confirmClearWarnings()" title="Admin only">Clear Warning Log</button>
+        </div>
+        <div class="table-wrap">
+          <table id="warnings-table">
+            <thead>
+              <tr>
+                <th>Log ID</th>
+                <th>Timestamp</th>
+                <th>Tracking No.</th>
+                <th>Customer / Site</th>
+                <th>Skipped Age</th>
+                <th>Risk Level</th>
+                <th>Skipped By</th>
+                <th>Reason &amp; Compliance Notes</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ===================== LIVE ACTIVE USER STICKY FOOTER ===================== -->
+<div class="live-user-bar" id="live-user-bar" style="display:none;">
+  <div class="user-indicator">
+    <span class="online-dot" id="live-online-dot"></span>
+    <span>Active Session: <strong id="live-user-name">Please Log In</strong></span>
+  </div>
+  <button class="btn-switch" onclick="logout()">🔒 Logout</button>
+</div>
+
+<!-- TOAST NOTIFICATION -->
+<div id="toast"></div>
+
+<!-- CONFIRMATION MODAL -->
+<div class="modal-backdrop" id="modal-backdrop">
+  <div class="modal">
+    <h3 id="modal-title">Confirm Action</h3>
+    <p id="modal-body">Are you sure you want to proceed?</p>
+    <div class="btn-row" style="justify-content:flex-end;">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" id="modal-confirm-btn">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<!-- SKIP TEST REASON MODAL -->
+<div class="modal-backdrop" id="skip-modal-backdrop">
+  <div class="modal" style="max-width:520px;">
+    <h3 id="skip-modal-title">Skip Test Age</h3>
+    <p id="skip-modal-body" style="margin-bottom:12px;">Please specify the engineering reason for skipping this test.</p>
+    
+    <div id="skip-warning-box" style="display:none; padding:12px; background:var(--red-bg); border:1px solid rgba(184,73,61,0.3); border-radius:var(--radius-sm); color:var(--red); font-size:12.5px; margin-bottom:14px; line-height:1.45;">
+      <strong>⚠️ CRITICAL WARNING:</strong> Skipping the 28-Day characteristic strength test is a major compliance deviation under BS EN 12390!
+    </div>
+
+    <div class="field">
+      <label>Reason for Skipping *</label>
+      <select id="skip-reason-select" onchange="toggleCustomReasonField()">
+        <option value="Target strength already achieved via early test">Target strength already achieved via early test</option>
+        <option value="Client / Consultant written instruction">Client / Consultant written instruction</option>
+        <option value="Cube specimen damaged during curing">Cube specimen damaged during curing</option>
+        <option value="Site pour cancelled / Non-structural pour">Site pour cancelled / Non-structural pour</option>
+        <option value="Other">Other (Specify below)</option>
+      </select>
+    </div>
+
+    <div class="field" id="skip-custom-reason-field" style="display:none;">
+      <label>Custom Reason Notes *</label>
+      <input type="text" id="skip-custom-reason-input" placeholder="Enter custom justification notes…">
+    </div>
+
+    <div class="btn-row" style="justify-content:flex-end; margin-top:20px;">
+      <button class="btn btn-ghost" onclick="closeSkipModal()">Cancel</button>
+      <button class="btn btn-primary" id="skip-confirm-btn" onclick="executeSkipTest()">Confirm Skip</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== NATIVE DATALISTS FOR AUTOCOMPLETE / SUGGESTIONS ===================== -->
+<datalist id="dl-customers"></datalist>
+<datalist id="dl-sites"></datalist>
+<datalist id="dl-designCodes"></datalist>
+<datalist id="dl-bulkNumbers"></datalist>
+<datalist id="dl-castedBy"></datalist>
+<datalist id="dl-testedBy"></datalist>
+
+<!-- FIREBASE SDK INITIALIZATION (CLOUD FIRESTORE INTEGRATION) -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+  import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+
+  // Production Firebase Project Configuration for APURA RMC PLANT
+  const firebaseConfig = {
+    apiKey: "AIzaSyDBIC3FUgKMqpN2OeCP6o43xoG7kYAs9Ok",
+    authDomain: "apura-rmc-qc.firebaseapp.com",
+    projectId: "apura-rmc-qc",
+    storageBucket: "apura-rmc-qc.firebasestorage.app",
+    messagingSenderId: "521259667866",
+    appId: "1:521259667866:web:c46d5156a65e592ba46a23"
+  };
+
+  let db = null;
+  let firebaseActive = false;
+
+  try {
+    if (firebaseConfig.apiKey) {
+      const app = initializeApp(firebaseConfig);
+      db = getFirestore(app);
+      firebaseActive = true;
+      console.log("🔥 Firebase Cloud Firestore connected to apura-rmc-qc.");
+    }
+  } catch (err) {
+    console.warn("⚠️ Firebase init failed, fallback to localStorage active:", err);
+  }
+
+  window.saveStateToFirebase = async function(stateData) {
+    if (!db || !firebaseActive) return false;
+    try {
+      const cleanState = JSON.parse(JSON.stringify(stateData));
+      const docRef = doc(db, "apura_qc_system", "main_state");
+      await setDoc(docRef, cleanState);
+      console.log("☁️ Full system state synced to Firebase Cloud Firestore (apura_qc_system/main_state).");
+      return true;
+    } catch (err) {
+      console.warn("⚠️ Firestore cloud save failed, local storage preserved:", err);
+      return false;
+    }
+  };
+
+  window.loadStateFromFirebase = async function() {
+    if (!db || !firebaseActive) return null;
+    try {
+      const docRef = doc(db, "apura_qc_system", "main_state");
+      const snap = await getDoc(docRef);
+      if (snap.exists()) {
+        console.log("☁️ Full system state loaded from Firebase Cloud Firestore (apura_qc_system/main_state).");
+        return snap.data();
+      }
+    } catch (err) {
+      console.warn("⚠️ Firestore cloud load failed, falling back to local storage:", err);
+    }
+    return null;
+  };
+</script>
+
+<script>
+/* =========================================================================
+   APURA RMC PLANT — CUBE QC SYSTEM (BS EN 12390 COMPLIANT)
+   Single-file local web app. Runs offline via browser localStorage.
+   ========================================================================= */
+
+const LS_KEY = 'apura_rmc_qc_data_v1';
+
+let state = {
+  master: [],
+  tests: [],
+  activities: [],
+  users: [],
+  skippedTests: [],
+  currentUser: null
+};
+
+let currentUser = null;
+let nextTrackingSeq = 1;
+
+/* ---------------------- ACCESS CONTROL & AUTH ---------------------- */
+function isAdmin(){
+  return currentUser && currentUser.role === 'admin';
+}
+
+function login(){
+  const userEl = document.getElementById('login-username-input');
+  const passEl = document.getElementById('login-password-input');
+  const errEl = document.getElementById('login-error-msg');
+  if(!userEl || !passEl) return;
+
+  const uname = userEl.value.trim();
+  const pass = passEl.value.trim();
+
+  if(!uname || !pass){
+    if(errEl){ errEl.textContent = 'Please enter both Username and Password.'; errEl.style.display = 'block'; }
+    return;
+  }
+
+  const found = state.users.find(u => u.username.toLowerCase() === uname.toLowerCase() && u.password === pass);
+
+  if(!found){
+    if(errEl){ errEl.textContent = 'Invalid username or password. Please try again.'; errEl.style.display = 'block'; }
+    return;
+  }
+
+  currentUser = found;
+  state.currentUser = found.username;
+  saveState();
+
+  if(errEl) errEl.style.display = 'none';
+  userEl.value = '';
+  passEl.value = '';
+
+  // Auto-fill technician names in forms
+  const castSelect = document.getElementById('f-castedBy');
+  if(castSelect) castSelect.value = found.username;
+  const testSelect = document.getElementById('tt-e-testedby');
+  if(testSelect) testSelect.value = found.username;
+
+  logActivity("User Login", "—", found.username, `User ${found.username} (${found.role}) logged in successfully`);
+  toast(`Welcome ${found.username}! Logged in as ${found.role.toUpperCase()}.`);
+
+  applyRoleRestrictions();
+  setTimeout(() => {
+    showView('home');
+  }, 60);
+}
+
+function logout(){
+  if(currentUser){
+    logActivity("User Logout", "—", currentUser.username, `User ${currentUser.username} logged out`);
+  }
+  currentUser = null;
+  state.currentUser = null;
+  saveState();
+  applyRoleRestrictions();
+  toast('Logged out successfully.');
+}
+
+function applyRoleRestrictions(){
+  const sidebar = document.getElementById('sidebar');
+  const liveBar = document.getElementById('live-user-bar');
+  const mobileBar = document.getElementById('mobile-topbar');
+  const navUsers = document.getElementById('nav-users-li');
+  const navWarnings = document.getElementById('nav-warnings-li');
+
+  if(!currentUser){
+    // Hide App Navigation & Show ONLY Login View
+    if(sidebar) sidebar.style.display = 'none';
+    if(liveBar) liveBar.style.display = 'none';
+    if(mobileBar) mobileBar.style.display = 'none';
+    
+    showView('login');
+    return;
+  }
+
+  // User is logged in — show application layout
+  if(sidebar) sidebar.style.display = 'flex';
+  if(liveBar) liveBar.style.display = 'flex';
+  if(mobileBar && window.innerWidth <= 960) mobileBar.style.display = 'flex';
+
+  const isAdminUser = (currentUser.role === 'admin');
+
+  // Update User Badges
+  const uNameEl = document.getElementById('sidebar-user-name');
+  if(uNameEl) uNameEl.textContent = `${currentUser.username} (${currentUser.role.toUpperCase()})`;
+  const liveUNameEl = document.getElementById('live-user-name');
+  if(liveUNameEl) liveUNameEl.textContent = `${currentUser.username} [${currentUser.role.toUpperCase()}]`;
+
+  // a) User Management & Warning Alerts sidebar link (Admin only)
+  if(navUsers){
+    navUsers.style.display = isAdminUser ? 'block' : 'none';
+  }
+  if(navWarnings){
+    navWarnings.style.display = isAdminUser ? 'block' : 'none';
+  }
+
+  const highRiskCount = (state.skippedTests || []).filter(s => s.severity === 'HIGH').length;
+  const badgeWarn = document.getElementById('badge-warning-count');
+  if(badgeWarn){
+    badgeWarn.textContent = highRiskCount;
+    badgeWarn.style.display = highRiskCount > 0 ? 'inline-block' : 'none';
+  }
+
+  // b) Backup, Restore, Reset Data buttons in Master Database (Admin only)
+  const btnBackup = document.getElementById('btn-backup-json');
+  if(btnBackup) btnBackup.style.display = isAdminUser ? 'inline-flex' : 'none';
+
+  const btnRestore = document.getElementById('btn-restore-json');
+  if(btnRestore) btnRestore.style.display = isAdminUser ? 'inline-flex' : 'none';
+
+  const btnReset = document.getElementById('btn-reset-data');
+  if(btnReset) btnReset.style.display = isAdminUser ? 'inline-flex' : 'none';
+
+  // c) Clear Activity Log & Warning Log buttons (Admin only)
+  const btnClearLog = document.getElementById('btn-clear-activity');
+  if(btnClearLog) btnClearLog.style.display = isAdminUser ? 'inline-flex' : 'none';
+
+  const btnClearWarnings = document.getElementById('btn-clear-warnings');
+  if(btnClearWarnings) btnClearWarnings.style.display = isAdminUser ? 'inline-flex' : 'none';
+
+  // d) Clear Form buttons (Admin only)
+  document.querySelectorAll('.btn-clear-form').forEach(btn => {
+    btn.style.display = isAdminUser ? 'inline-flex' : 'none';
+  });
+}
+
+/* ---------------------- DYNAMIC AUTOCOMPLETE / SUGGESTION ENGINE ---------------------- */
+function updateSuggestions(){
+  const customers = [...new Set(state.master.map(m => (m.customer || '').trim()).filter(Boolean))].sort();
+  const sites = [...new Set(state.master.map(m => (m.site || '').trim()).filter(Boolean))].sort();
+  const designCodes = [...new Set(state.master.map(m => (m.designCode || '').trim()).filter(Boolean))].sort();
+  const bulkNumbers = [...new Set(state.master.map(m => (m.bulkNumber || '').trim()).filter(Boolean))].sort();
+
+  const userList = (state.users || []).map(u => u.username);
+  const defaultCastTechs = ["Jagath", "Sunil", "Pushpe", "admin", ...userList];
+  const castedByList = [...new Set([...defaultCastTechs, ...state.master.map(m => (m.castedBy || '').trim()).filter(Boolean)])].sort();
+
+  const defaultTestTechs = ["QC", "Technician", "Lab Helper", "Jagath", "Sunil", "Pushpe", "admin", ...userList];
+  const testedByList = [...new Set([...defaultTestTechs, ...state.tests.map(t => (t.testedBy || '').trim()).filter(Boolean)])].sort();
+
+  populateDatalist('dl-customers', customers);
+  populateDatalist('dl-sites', sites);
+  populateDatalist('dl-designCodes', designCodes);
+  populateDatalist('dl-bulkNumbers', bulkNumbers);
+  populateDatalist('dl-castedBy', castedByList);
+  populateDatalist('dl-testedBy', testedByList);
+
+  filterReportTrackingNumbers();
+}
+
+function populateDatalist(id, values){
+  const dl = document.getElementById(id);
+  if(!dl) return;
+  dl.innerHTML = values.map(val => `<option value="${escapeHtml(val)}"></option>`).join('');
+}
+
+function escapeHtml(str){
+  return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/* ---------------------- AUDIT LOGGING SYSTEM ---------------------- */
+function logActivity(actionType, trackingNumber, user, details){
+  if(!state.activities) state.activities = [];
+  const now = new Date();
+  const activeUser = user || (currentUser ? currentUser.username : 'System');
+  const logItem = {
+    id: 'ACT-' + String(state.activities.length + 1).padStart(5, '0'),
+    timestamp: now.toISOString(),
+    formattedTime: fmtDateTime(now),
+    actionType,
+    trackingNumber: trackingNumber || '—',
+    user: activeUser,
+    details
+  };
+  state.activities.unshift(logItem);
+  saveState();
+}
+
+function fmtDateTime(d){
+  if(!d) return '';
+  const dt = (d instanceof Date) ? d : new Date(d);
+  if(isNaN(dt)) return '';
+  const dd = String(dt.getDate()).padStart(2,'0');
+  const mm = String(dt.getMonth()+1).padStart(2,'0');
+  const yyyy = dt.getFullYear();
+  const hh = String(dt.getHours()).padStart(2,'0');
+  const min = String(dt.getMinutes()).padStart(2,'0');
+  const ss = String(dt.getSeconds()).padStart(2,'0');
+  return `${dd}/${mm}/${yyyy} ${hh}:${min}:${ss}`;
+}
+
+/* ---------------------- INITIAL SAMPLE DATA GENERATOR ---------------------- */
+function populateSampleDataIfEmpty(){
+  if(state.master.length > 0) return;
+
+  state.master = [
+    {
+      trackingNumber: "TKC-000001",
+      castingDate: "2026-01-01",
+      castTime: "09:00",
+      customer: "SRI CONSTRUCTION",
+      site: "VIJAYAPURA",
+      weather: "☀ Sunny",
+      designCode: "AB/C25/64",
+      grade: "C25",
+      slump: "160 mm",
+      cementContent: 280,
+      volume: 22.75,
+      cementSilo: "Silo 01",
+      bulkNumber: "BN-4521",
+      castedBy: "Jagath",
+      numCubes: 4,
+      remarks: "Plant pour Vijayapura",
+      dateCreated: "2026-01-01T09:00:00.000Z",
+      lastUpdated: "2026-01-29T10:00:00.000Z"
+    },
+    {
+      trackingNumber: "TKC-000002",
+      castingDate: "2026-01-01",
+      castTime: "11:30",
+      customer: "SAMPATH HARDWARE - IRRIGATION",
+      site: "RAMBEWA",
+      weather: "☁ Cloudy",
+      designCode: "AB/C25/64",
+      grade: "C25",
+      slump: "165 mm",
+      cementContent: 280,
+      volume: 5.8,
+      cementSilo: "Silo 02",
+      bulkNumber: "BN-4525",
+      castedBy: "Sunil",
+      numCubes: 4,
+      remarks: "Canal structure pour",
+      dateCreated: "2026-01-01T11:30:00.000Z",
+      lastUpdated: "2026-01-29T11:00:00.000Z"
+    },
+    {
+      trackingNumber: "TKC-000003",
+      castingDate: "2026-01-02",
+      castTime: "14:15",
+      customer: "MR.PREDEEP",
+      site: "MIHINTHALE",
+      weather: "☀ Sunny",
+      designCode: "AB/C20/38",
+      grade: "C20",
+      slump: "160 mm",
+      cementContent: 270,
+      volume: 4,
+      cementSilo: "Silo 01",
+      bulkNumber: "BN-4530",
+      castedBy: "Pushpe",
+      numCubes: 4,
+      remarks: "Residential slab",
+      dateCreated: "2026-01-02T14:15:00.000Z",
+      lastUpdated: "2026-01-30T10:00:00.000Z"
+    }
+  ];
+
+  state.tests = [
+    // Casting 1 tests (7d: 21.45 MPa, 28d: 31.9 MPa)
+    { testId: "TKC-000001-T1", trackingNumber: "TKC-000001", testingDate: "2026-01-08", testingAge: "7 Days", testedBy: "QC", load: 482.63, weight: 8.25, cubeSize: 150, strength: 21.45, designCode: "AB/C25/64", grade: "C25" },
+    { testId: "TKC-000001-T2", trackingNumber: "TKC-000001", testingDate: "2026-01-29", testingAge: "28 Days", testedBy: "Technician", load: 717.75, weight: 8.30, cubeSize: 150, strength: 31.90, designCode: "AB/C25/64", grade: "C25" },
+
+    // Casting 2 tests (7d: 21.77 MPa, 28d: 30.99 MPa)
+    { testId: "TKC-000002-T1", trackingNumber: "TKC-000002", testingDate: "2026-01-08", testingAge: "7 Days", testedBy: "Technician", load: 489.83, weight: 8.22, cubeSize: 150, strength: 21.77, designCode: "AB/C25/64", grade: "C25" },
+    { testId: "TKC-000002-T2", trackingNumber: "TKC-000002", testingDate: "2026-01-29", testingAge: "28 Days", testedBy: "QC", load: 697.28, weight: 8.28, cubeSize: 150, strength: 30.99, designCode: "AB/C25/64", grade: "C25" },
+
+    // Casting 3 tests (7d: 19.54 MPa, 28d: 26.4 MPa)
+    { testId: "TKC-000003-T1", trackingNumber: "TKC-000003", testingDate: "2026-01-09", testingAge: "7 Days", testedBy: "QC", load: 439.65, weight: 8.18, cubeSize: 150, strength: 19.54, designCode: "AB/C20/38", grade: "C20" },
+    { testId: "TKC-000003-T2", trackingNumber: "TKC-000003", testingDate: "2026-01-30", testingAge: "28 Days", testedBy: "Technician", load: 594.00, weight: 8.24, cubeSize: 150, strength: 26.40, designCode: "AB/C20/38", grade: "C20" }
+  ];
+
+  state.activities = [
+    { id: "ACT-00001", timestamp: "2026-01-01T09:00:00.000Z", formattedTime: "01/01/2026 09:00:00", actionType: "New Entry", trackingNumber: "TKC-000001", user: "Jagath", details: "Created casting record for SRI CONSTRUCTION (VIJAYAPURA, Grade C25, 4 Cubes, 22.75 m³)" },
+    { id: "ACT-00002", timestamp: "2026-01-08T09:30:00.000Z", formattedTime: "08/01/2026 09:30:00", actionType: "Test Recorded", trackingNumber: "TKC-000001", user: "QC", details: "Recorded 7 Days test TKC-000001-T1 (21.45 N/mm², 482.63 kN)" },
+    { id: "ACT-00003", timestamp: "2026-01-29T10:00:00.000Z", formattedTime: "29/01/2026 10:00:00", actionType: "Test Recorded", trackingNumber: "TKC-000001", user: "admin", details: "Recorded 28 Days test TKC-000001-T2 (31.90 N/mm², 717.75 kN)" }
+  ];
+
+  nextTrackingSeq = 4;
+  saveState();
+}
+
+/* ---------------------- PERSISTENCE ---------------------- */
+function saveState(){
+  localStorage.setItem(LS_KEY, JSON.stringify(state));
+  if(window.saveStateToFirebase){
+    window.saveStateToFirebase(state);
+  }
+}
+
+async function loadState(){
+  let loadedFromCloud = false;
+  if(window.loadStateFromFirebase){
+    const cloudData = await window.loadStateFromFirebase();
+    if(cloudData && typeof cloudData === 'object'){
+      state = {
+        master: Array.isArray(cloudData.master) ? cloudData.master : [],
+        tests: Array.isArray(cloudData.tests) ? cloudData.tests : [],
+        activities: Array.isArray(cloudData.activities) ? cloudData.activities : [],
+        users: Array.isArray(cloudData.users) ? cloudData.users : [],
+        skippedTests: Array.isArray(cloudData.skippedTests) ? cloudData.skippedTests : [],
+        currentUser: null
+      };
+      if(state.master.length || state.tests.length) {
+        loadedFromCloud = true;
+      }
+    }
+  }
+
+  if(!loadedFromCloud){
+    const raw = localStorage.getItem(LS_KEY);
+    if(raw){
+      try{
+        const parsed = JSON.parse(raw);
+        state = {
+          master: Array.isArray(parsed.master) ? parsed.master : [],
+          tests: Array.isArray(parsed.tests) ? parsed.tests : [],
+          activities: Array.isArray(parsed.activities) ? parsed.activities : [],
+          users: Array.isArray(parsed.users) ? parsed.users : [],
+          skippedTests: Array.isArray(parsed.skippedTests) ? parsed.skippedTests : [],
+          currentUser: null
+        };
+        if(!state.tests && Array.isArray(parsed.tests)) state.tests = parsed.tests;
+      }catch(e){ console.error('Error parsing stored data', e); }
+    }
+    
+    if(!state.master || !state.master.length){
+      populateSampleDataIfEmpty();
+    }
+  }
+
+  if(!state.master) state.master = [];
+  if(!state.tests) state.tests = [];
+  if(!state.activities) state.activities = [];
+  if(!state.users) state.users = [];
+  if(!state.skippedTests) state.skippedTests = [];
+
+  let maxSeq = 0;
+  state.master.forEach(m=>{
+    if(!m.activeAges) m.activeAges = ['3 Days', '7 Days', '14 Days', '28 Days'];
+    const n = parseInt((m.trackingNumber||'').split('-')[1],10);
+    if(!isNaN(n) && n>maxSeq) maxSeq=n;
+  });
+  nextTrackingSeq = maxSeq+1;
+
+  // Seed default admin and operator users if empty
+  if(!state.users || !state.users.length){
+    state.users = [
+      { username: 'admin', password: '123', role: 'admin' },
+      { username: 'Jagath', password: '123', role: 'operator' },
+      { username: 'Pushpe', password: '123', role: 'operator' },
+      { username: 'Sunil', password: '123', role: 'operator' }
+    ];
+  } else {
+    // Ensure default admin user always exists
+    if(!state.users.some(u => u.username && u.username.toLowerCase() === 'admin')){
+      state.users.unshift({ username: 'admin', password: '123', role: 'admin' });
+    }
+  }
+
+  saveState();
+  updateSuggestions();
+
+  currentUser = null;
+  state.currentUser = null;
+  applyRoleRestrictions();
+}
+loadState();
+
+/* ---------------------- HELPERS & CALCULATIONS ---------------------- */
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2800);
+}
+
+function fmtDate(d){
+  if(!d) return '';
+  const dt = (d instanceof Date) ? d : new Date(d + (typeof d==='string' && !d.includes('T') ? 'T00:00:00':''));
+  if(isNaN(dt)) return '';
+  const dd = String(dt.getDate()).padStart(2,'0');
+  const mm = String(dt.getMonth()+1).padStart(2,'0');
+  return `${dd}/${mm}/${dt.getFullYear()}`;
+}
+
+function daysBetween(dateStrA, dateStrB){
+  const MS = 24*60*60*1000;
+  const da = new Date(dateStrA + (typeof dateStrA==='string' && !dateStrA.includes('T') ? 'T00:00:00':''));
+  const db = new Date(dateStrB + (typeof dateStrB==='string' && !dateStrB.includes('T') ? 'T00:00:00':''));
+  da.setHours(0,0,0,0); db.setHours(0,0,0,0);
+  return Math.round((db - da)/MS);
+}
+
+function addDays(dateStr, n){
+  const dt = new Date(dateStr + (typeof dateStr==='string' && !dateStr.includes('T') ? 'T00:00:00':''));
+  dt.setDate(dt.getDate()+n);
+  return dt;
+}
+
+function gradeTarget(grade){
+  const m = (grade||'').match(/(\d+)/);
+  return m ? parseInt(m[1],10) : null;
+}
+
+function nextTrackingNumber(){
+  const tn = 'TKC-' + String(nextTrackingSeq).padStart(6,'0');
+  nextTrackingSeq++;
+  return tn;
+}
+
+function findMaster(tn){
+  return state.master.find(m=>m.trackingNumber.toLowerCase() === (tn||'').trim().toLowerCase());
+}
+
+function testsFor(tn){
+  return state.tests.filter(t=>t.trackingNumber === tn);
+}
+
+const STANDARD_AGES = [
+  {label:'3 Days', days:3},
+  {label:'7 Days', days:7},
+  {label:'14 Days', days:14},
+  {label:'28 Days', days:28},
+];
+
+function detectAge(castingDate, testingDate){
+  const gap = daysBetween(castingDate, testingDate);
+  let best = STANDARD_AGES[0], bestDiff = Infinity;
+  STANDARD_AGES.forEach(a=>{
+    const diff = Math.abs(a.days - gap);
+    if(diff < bestDiff){ bestDiff = diff; best = a; }
+  });
+  return bestDiff <= 2 ? best.label : 'Other';
+}
+
+function buildSchedule(){
+  const rows = [];
+  const today = new Date(); today.setHours(0,0,0,0);
+  const todayStr = today.toISOString().slice(0,10);
+
+  state.master.forEach(m=>{
+    const activeAges = (m.activeAges && m.activeAges.length) ? m.activeAges : ['3 Days', '7 Days', '14 Days', '28 Days'];
+    const activeAgeObjects = STANDARD_AGES.filter(a => activeAges.includes(a.label));
+
+    activeAgeObjects.forEach(age=>{
+      const due = addDays(m.castingDate, age.days);
+      const dueStr = due.toISOString().slice(0,10);
+      const completedTest = state.tests.find(t=>t.trackingNumber===m.trackingNumber && t.testingAge===age.label);
+      const skippedTest = (state.skippedTests || []).find(s=>s.trackingNumber===m.trackingNumber && s.skippedAge===age.label);
+
+      let status;
+      if(completedTest){ status='Completed'; }
+      else if(skippedTest){ status='Skipped'; }
+      else if(dueStr < todayStr){ status='Overdue'; }
+      else if(dueStr === todayStr){ status='Due Today'; }
+      else{ status='Future'; }
+
+      rows.push({
+        trackingNumber:m.trackingNumber, castingDate:m.castingDate, dueDate:due,
+        age:age.label, site:m.site, grade:m.grade, designCode:m.designCode,
+        technician: completedTest ? completedTest.testedBy : (skippedTest ? skippedTest.skippedBy : ''),
+        status, daysRemaining: daysBetween(todayStr, dueStr)
+      });
+    });
+  });
+  return rows;
+}
+
+/* Maintain core 28-day mature result strength calculation */
+function computeDerived(m){
+  const tests = testsFor(m.trackingNumber);
+  const testsCompleted = tests.length;
+  const standardCompleted = tests.filter(t=>STANDARD_AGES.some(a=>a.label===t.testingAge)).length;
+  const cappedStandard = Math.min(4, m.numCubes);
+
+  let status;
+  if(testsCompleted===0) status='Open';
+  else if(standardCompleted >= cappedStandard) status='Completed';
+  else status='Partially Tested';
+
+  const mature = tests.filter(t=>t.testingAge==='28 Days');
+  let avgStrength = null, passFail = 'Pending';
+  if(mature.length){
+    avgStrength = mature.reduce((s,t)=>s+t.strength,0)/mature.length;
+    const target = gradeTarget(m.grade);
+    passFail = (target!=null && avgStrength >= target) ? 'Pass' : 'Fail';
+  }
+  return {status, testsCompleted, avgStrength, passFail};
+}
+
+/* ---------------------- NAVIGATION & LAYOUT ---------------------- */
+function showView(name){
+  if(!currentUser && name !== 'login'){
+    applyRoleRestrictions();
+    return;
+  }
+
+  if(name === 'users' && (!currentUser || currentUser.role !== 'admin')){
+    toast('Access Denied: User Management is restricted to Admin users only.');
+    return;
+  }
+
+  if(name === 'warnings' && (!currentUser || currentUser.role !== 'admin')){
+    toast('Access Denied: Warning Alerts log is restricted to Admin users only.');
+    return;
+  }
+
+  document.querySelectorAll('.view').forEach(v=>{
+    v.style.display = '';
+    v.classList.remove('active');
+  });
+
+  const targetView = document.getElementById('view-'+name);
+  if(targetView){
+    targetView.classList.add('active');
+  }
+
+  document.querySelectorAll('.navlist button').forEach(b=>b.classList.toggle('active', b.dataset.view===name));
+
+  if(window.innerWidth <= 960){
+    const sb = document.getElementById('sidebar');
+    if(sb) sb.classList.remove('show');
+  }
+
+  if(name==='home') renderHome();
+  if(name==='testing') renderTestingSidebarList();
+  if(name==='schedule') renderSchedule();
+  if(name==='dashboard') renderDashboard();
+  if(name==='reports') filterReportTrackingNumbers();
+  if(name==='daily') renderDailyReport();
+  if(name==='master') renderMaster();
+  if(name==='activity') renderActivityLog();
+  if(name==='users') renderUsers();
+  if(name==='warnings') renderWarnings();
+}
+
+document.getElementById('navlist').addEventListener('click', e=>{
+  const btn = e.target.closest('button[data-view]');
+  if(btn) showView(btn.dataset.view);
+});
+
+function toggleMobileNav(){
+  const sb = document.getElementById('sidebar');
+  if(sb) sb.classList.toggle('show');
+}
+
+/* ---------------------- USER MANAGEMENT (ADMIN ONLY) ---------------------- */
+function renderUsers(){
+  const tbody = document.querySelector('#users-table tbody');
+  if(!tbody) return;
+
+  if(!state.users || !state.users.length){
+    tbody.innerHTML = `<tr><td colspan="3"><div class="empty-state">No user accounts found.</div></td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = state.users.map(u => {
+    const isSelf = currentUser && (u.username.toLowerCase() === currentUser.username.toLowerCase());
+    const roleBadge = u.role === 'admin' ? '<span class="badge badge-purple">Admin</span>' : '<span class="badge badge-blue">Operator</span>';
+    
+    return `
+      <tr>
+        <td class="mono"><strong>${escapeHtml(u.username)}</strong> ${isSelf ? ' <span style="font-size:11px;color:var(--slate);">(You)</span>' : ''}</td>
+        <td>${roleBadge}</td>
+        <td>
+          <button class="btn btn-sm btn-ghost" onclick="editUser('${escapeHtml(u.username)}')">Edit</button>
+          ${!isSelf ? `<button class="btn btn-sm btn-danger" onclick="deleteUser('${escapeHtml(u.username)}')">Delete</button>` : '<span style="font-size:11px;color:var(--ink-soft);">Self</span>'}
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function clearUserForm(){
+  document.getElementById('um-username').value = '';
+  document.getElementById('um-password').value = '';
+  document.getElementById('um-role').value = 'operator';
+  document.getElementById('um-editing-username').value = '';
+  document.getElementById('um-username').removeAttribute('readonly');
+  document.getElementById('um-form-title').textContent = 'Add New User';
+}
+
+function editUser(username){
+  const u = state.users.find(x => x.username.toLowerCase() === username.toLowerCase());
+  if(!u) return;
+
+  document.getElementById('um-username').value = u.username;
+  document.getElementById('um-username').setAttribute('readonly', 'true');
+  document.getElementById('um-password').value = u.password;
+  document.getElementById('um-role').value = u.role;
+  document.getElementById('um-editing-username').value = u.username;
+  document.getElementById('um-form-title').textContent = `Edit User: ${u.username}`;
+}
+
+function saveUser(){
+  if(!currentUser || currentUser.role !== 'admin'){
+    toast('Access Denied: Only Admins can manage user accounts.');
+    return;
+  }
+
+  const uname = document.getElementById('um-username').value.trim();
+  const pass = document.getElementById('um-password').value.trim();
+  const role = document.getElementById('um-role').value;
+  const editingUser = document.getElementById('um-editing-username').value;
+
+  if(!uname || !pass){
+    toast('Both Username and Password are required.');
+    return;
+  }
+
+  if(editingUser){
+    // Update existing user
+    const existing = state.users.find(u => u.username.toLowerCase() === editingUser.toLowerCase());
+    if(existing){
+      existing.password = pass;
+      existing.role = role;
+      logActivity("User Updated", "—", currentUser.username, `Updated user account ${existing.username} (Role: ${role})`);
+      toast(`User ${existing.username} updated.`);
+    }
+  } else {
+    // Add new user
+    if(state.users.some(u => u.username.toLowerCase() === uname.toLowerCase())){
+      toast(`User "${uname}" already exists.`);
+      return;
+    }
+    state.users.push({ username: uname, password: pass, role: role });
+    logActivity("User Created", "—", currentUser.username, `Created new ${role} account for ${uname}`);
+    toast(`User ${uname} created successfully.`);
+  }
+
+  saveState();
+  clearUserForm();
+  renderUsers();
+  updateSuggestions();
+}
+
+function deleteUser(username){
+  if(!currentUser || currentUser.role !== 'admin'){
+    toast('Access Denied: Only Admins can manage user accounts.');
+    return;
+  }
+
+  if(currentUser && username.toLowerCase() === currentUser.username.toLowerCase()){
+    toast('Cannot delete your own logged-in admin account.');
+    return;
+  }
+
+  showModal(
+    "Delete User Account",
+    `Are you sure you want to delete user account "${username}"?`,
+    ()=>{
+      state.users = state.users.filter(u => u.username.toLowerCase() !== username.toLowerCase());
+      logActivity("User Deleted", "—", currentUser.username, `Deleted user account ${username}`);
+      saveState();
+      renderUsers();
+      updateSuggestions();
+      toast(`User ${username} deleted.`);
+    }
+  );
+}
+
+/* ---------------------- CUBE ENTRY ---------------------- */
+function clearEntryForm(){
+  ['f-castingDate','f-castTime','f-customer','f-site','f-designCode','f-cement','f-volume','f-bulk','f-remarks','f-grade','f-slump','f-silo','f-castedBy']
+    .forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  document.getElementById('f-weather').value = '☀ Sunny';
+  document.getElementById('f-numCubes').value = 4;
+  document.getElementById('f-castingDate').valueAsDate = new Date();
+  if(currentUser) document.getElementById('f-castedBy').value = currentUser.username;
+
+  // Default all planned testing interval checkboxes to checked
+  ['f-age-3d', 'f-age-7d', 'f-age-14d', 'f-age-28d'].forEach(id => {
+    const cb = document.getElementById(id);
+    if(cb) cb.checked = true;
+  });
+}
+
+function saveCubeEntry(){
+  if(!currentUser){ applyRoleRestrictions(); return; }
+
+  const customer = document.getElementById('f-customer').value.trim();
+  const site = document.getElementById('f-site').value.trim();
+  const designCode = document.getElementById('f-designCode').value.trim();
+  const bulk = document.getElementById('f-bulk').value.trim();
+  const castingDate = document.getElementById('f-castingDate').value;
+  const grade = document.getElementById('f-grade').value;
+  const slump = document.getElementById('f-slump').value;
+  const silo = document.getElementById('f-silo').value;
+  const weather = document.getElementById('f-weather').value;
+  const castedBy = document.getElementById('f-castedBy').value.trim() || currentUser.username;
+  const cement = parseFloat(document.getElementById('f-cement').value);
+  const volume = parseFloat(document.getElementById('f-volume').value);
+  const numCubes = parseInt(document.getElementById('f-numCubes').value,10);
+
+  if(!castingDate){ toast('Casting Date is required.'); return; }
+  if(!customer){ toast('Customer Name is required.'); return; }
+  if(!site){ toast('Supply Site Location is required.'); return; }
+  if(!designCode){ toast('Design Code is required.'); return; }
+  if(!bulk){ toast('Bulk Number is required.'); return; }
+  if(!grade){ toast('Grade is required.'); return; }
+  if(!slump){ toast('Slump is required.'); return; }
+  if(!silo){ toast('Cement Silo is required.'); return; }
+  if(!castedBy){ toast('Casted By is required.'); return; }
+  if(isNaN(cement) || cement < 0){ toast('Cement Content cannot be negative.'); return; }
+  if(isNaN(volume) || volume < 0){ toast('Volume (m³) cannot be negative.'); return; }
+  if(isNaN(numCubes) || numCubes < 1 || numCubes > 20){ toast('Number of Cubes must be between 1 and 20.'); return; }
+
+  // Read selected planned testing intervals (fallback to 7d & 28d if empty)
+  const selectedAges = [];
+  if(document.getElementById('f-age-3d') && document.getElementById('f-age-3d').checked) selectedAges.push('3 Days');
+  if(document.getElementById('f-age-7d') && document.getElementById('f-age-7d').checked) selectedAges.push('7 Days');
+  if(document.getElementById('f-age-14d') && document.getElementById('f-age-14d').checked) selectedAges.push('14 Days');
+  if(document.getElementById('f-age-28d') && document.getElementById('f-age-28d').checked) selectedAges.push('28 Days');
+  const activeAges = selectedAges.length ? selectedAges : ['7 Days', '28 Days'];
+
+  const tn = nextTrackingNumber();
+  const now = new Date().toISOString();
+  state.master.push({
+    trackingNumber: tn, castingDate, castTime: document.getElementById('f-castTime').value,
+    customer, site, weather, designCode, grade, slump, cementContent: cement, volume, cementSilo: silo,
+    bulkNumber: bulk, castedBy, numCubes, activeAges, remarks: document.getElementById('f-remarks').value.trim(),
+    dateCreated: now, lastUpdated: now
+  });
+
+  logActivity("New Entry", tn, castedBy, `Cast ${numCubes} cubes for ${customer} at ${site} (Grade: ${grade}, Active Ages: ${activeAges.join(', ')})`);
+
+  updateSuggestions();
+  renderTestingSidebarList();
+  toast(`Saved — Tracking Number ${tn} generated.`);
+  clearEntryForm();
+}
+
+/* ---------------------- RECALL RECORD & JUMP TO RECALL ---------------------- */
+function recallRecord(){
+  const tn = document.getElementById('recall-search').value;
+  const m = findMaster(tn);
+  const body = document.getElementById('recall-body');
+  const testCard = document.getElementById('recall-tests-card');
+
+  if(!m){ 
+    toast('Tracking Number not found.'); 
+    if(body) body.style.display='none'; 
+    if(testCard) testCard.style.display='none'; 
+    return; 
+  }
+
+  const d = computeDerived(m);
+  if(body) body.style.display='block';
+
+  document.getElementById('rc-tn').textContent = m.trackingNumber;
+  document.getElementById('rc-date').textContent = fmtDate(m.castingDate);
+  document.getElementById('rc-design').textContent = m.designCode;
+  document.getElementById('rc-castedby').textContent = m.castedBy;
+  document.getElementById('rc-numcubes').textContent = m.numCubes;
+  document.getElementById('rc-status').textContent = d.status;
+
+  document.getElementById('rc-e-customer').value = m.customer || '';
+  document.getElementById('rc-e-site').value = m.site;
+  document.getElementById('rc-e-volume').value = m.volume != null ? m.volume : '';
+  document.getElementById('rc-e-weather').value = m.weather || '☀ Sunny';
+  document.getElementById('rc-e-grade').value = m.grade;
+  document.getElementById('rc-e-slump').value = m.slump;
+  document.getElementById('rc-e-cement').value = m.cementContent;
+  document.getElementById('rc-e-silo').value = m.cementSilo;
+  document.getElementById('rc-e-bulk').value = m.bulkNumber;
+  document.getElementById('rc-e-remarks').value = m.remarks || '';
+
+  const activeAges = m.activeAges || ['3 Days', '7 Days', '14 Days', '28 Days'];
+  if(document.getElementById('rc-age-3d')) document.getElementById('rc-age-3d').checked = activeAges.includes('3 Days');
+  if(document.getElementById('rc-age-7d')) document.getElementById('rc-age-7d').checked = activeAges.includes('7 Days');
+  if(document.getElementById('rc-age-14d')) document.getElementById('rc-age-14d').checked = activeAges.includes('14 Days');
+  if(document.getElementById('rc-age-28d')) document.getElementById('rc-age-28d').checked = activeAges.includes('28 Days');
+
+  // Role-Based Control: Admins can edit, Operators can only view
+  const isAdminUser = isAdmin();
+  const editableIds = ['rc-e-customer', 'rc-e-site', 'rc-e-volume', 'rc-e-weather', 'rc-e-grade', 'rc-e-slump', 'rc-e-cement', 'rc-e-silo', 'rc-e-bulk', 'rc-e-remarks', 'rc-age-3d', 'rc-age-7d', 'rc-age-14d', 'rc-age-28d'];
+
+  editableIds.forEach(id => {
+    const el = document.getElementById(id);
+    if(el){
+      if(isAdminUser){
+        el.removeAttribute('disabled');
+        el.removeAttribute('readonly');
+      } else {
+        el.setAttribute('disabled', 'true');
+      }
+    }
+  });
+
+  const btnUpdate = document.getElementById('btn-update-record');
+  if(btnUpdate){
+    btnUpdate.style.display = isAdminUser ? 'inline-flex' : 'none';
+  }
+
+  renderRecallTestsHistory(m.trackingNumber);
+}
+
+function renderRecallTestsHistory(tn){
+  const card = document.getElementById('recall-tests-card');
+  const tbody = document.querySelector('#recall-tests-table tbody');
+  if(!card || !tbody) return;
+
+  const tests = testsFor(tn);
+  card.style.display = 'block';
+
+  if(!tests.length){
+    tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state" style="padding:16px;"><div class="ic">&#9744;</div>No test results recorded for this casting yet.</div></td></tr>`;
+    return;
+  }
+
+  const isAdminUser = isAdmin();
+
+  tbody.innerHTML = tests.map(t => `
+    <tr>
+      <td class="mono"><strong>${t.testId}</strong></td>
+      <td><span class="badge badge-blue">${t.testingAge}</span></td>
+      <td class="mono">${fmtDate(t.testingDate)}</td>
+      <td style="font-weight:600;color:var(--slate-deep);">${escapeHtml(t.testedBy)}</td>
+      <td style="text-align:right;" class="mono">${t.weight ? t.weight.toFixed(2) : '8.25'}</td>
+      <td style="text-align:right;" class="mono">${t.load.toFixed(2)}</td>
+      <td style="text-align:right;font-weight:700;" class="mono">${t.strength.toFixed(2)}</td>
+      <td>
+        ${isAdminUser ? `<button class="btn btn-sm btn-danger" onclick="deleteTestSample('${t.testId}', '${t.trackingNumber}')" title="Delete sample reading">Delete</button>` : '—'}
+      </td>
+    </tr>
+  `).join('');
+}
+
+function deleteTestSample(testId, tn){
+  if(!isAdmin()){
+    toast("Access Denied: Deleting individual test readings is restricted to Admin users only.");
+    return;
+  }
+  showModal(
+    "Delete Test Sample Reading",
+    `Are you sure you want to delete test reading "${testId}"? This will update the batch average strength.`,
+    ()=>{
+      state.tests = state.tests.filter(t => t.testId !== testId);
+      logActivity("Test Reading Deleted", tn, currentUser.username, `Deleted test sample reading ${testId}`);
+      saveState();
+      updateSuggestions();
+      renderRecallTestsHistory(tn);
+      recallRecord();
+      toast(`Test reading ${testId} deleted.`);
+    }
+  );
+}
+
+function jumpToRecall(tn){
+  showView('recall');
+  const input = document.getElementById('recall-search');
+  if(input){
+    input.value = tn;
+    recallRecord();
+  }
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function updateRecord(){
+  if(!isAdmin()){ 
+    toast('Access Denied: Only Admins are authorized to update casting records.'); 
+    return; 
+  }
+
+  const tn = document.getElementById('rc-tn').textContent;
+  const m = findMaster(tn);
+  if(!m) return;
+  const customer = document.getElementById('rc-e-customer').value.trim();
+  const site = document.getElementById('rc-e-site').value.trim();
+  const bulk = document.getElementById('rc-e-bulk').value.trim();
+  const cement = parseFloat(document.getElementById('rc-e-cement').value);
+  const volume = parseFloat(document.getElementById('rc-e-volume').value);
+
+  if(!customer){ toast('Customer Name cannot be blank.'); return; }
+  if(!site){ toast('Supply Site Location cannot be blank.'); return; }
+  if(!bulk){ toast('Bulk Number cannot be blank.'); return; }
+  if(isNaN(cement) || cement < 0){ toast('Cement Content cannot be negative.'); return; }
+  if(isNaN(volume) || volume < 0){ toast('Volume (m³) cannot be negative.'); return; }
+
+  const selectedAges = [];
+  if(document.getElementById('rc-age-3d') && document.getElementById('rc-age-3d').checked) selectedAges.push('3 Days');
+  if(document.getElementById('rc-age-7d') && document.getElementById('rc-age-7d').checked) selectedAges.push('7 Days');
+  if(document.getElementById('rc-age-14d') && document.getElementById('rc-age-14d').checked) selectedAges.push('14 Days');
+  if(document.getElementById('rc-age-28d') && document.getElementById('rc-age-28d').checked) selectedAges.push('28 Days');
+
+  m.customer = customer;
+  m.site = site;
+  m.volume = volume;
+  m.weather = document.getElementById('rc-e-weather').value;
+  m.grade = document.getElementById('rc-e-grade').value;
+  m.slump = document.getElementById('rc-e-slump').value;
+  m.cementContent = cement;
+  m.cementSilo = document.getElementById('rc-e-silo').value;
+  m.bulkNumber = bulk;
+  m.activeAges = selectedAges.length ? selectedAges : ['7 Days', '28 Days'];
+  m.remarks = document.getElementById('rc-e-remarks').value.trim();
+  m.lastUpdated = new Date().toISOString();
+
+  logActivity("Record Updated", tn, currentUser.username, `Updated record parameters (Customer: ${customer}, Site: ${site}, Active Ages: ${m.activeAges.join(', ')})`);
+
+  saveState();
+  updateSuggestions();
+  toast(`${tn} updated successfully.`);
+  recallRecord();
+}
+
+/* ---------------------- TESTING ENTRY & SIDEBAR LIST ---------------------- */
+let currentTestingTN = null;
+
+function renderTestingSidebarList(){
+  const container = document.getElementById('testing-sidebar-container');
+  const table = document.getElementById('testing-sidebar-table');
+  if(!container || !table) return;
+
+  const sched = buildSchedule();
+  let pendingItems = sched.filter(s => s.status === 'Overdue' || s.status === 'Due Today');
+  pendingItems.sort((a,b) => new Date(a.dueDate) - new Date(b.dueDate));
+
+  const tbody = table.querySelector('tbody');
+  if(!pendingItems.length){
+    tbody.innerHTML = `<tr><td colspan="4"><div class="empty-state" style="padding:24px 10px;"><div class="ic">&#10003;</div>No pending or overdue tests!</div></td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = pendingItems.map(item => `
+    <tr>
+      <td><a href="#" onclick="jumpToRecall('${item.trackingNumber}'); return false;" class="tn-link">${item.trackingNumber}</a></td>
+      <td>${item.age}</td>
+      <td>${statusBadge(item.status)}</td>
+      <td style="display:flex;gap:4px;">
+        <button class="btn btn-sm btn-primary" onclick="jumpToTesting('${item.trackingNumber}')">Record</button>
+        <button class="btn btn-sm btn-ghost" style="color:var(--amber);" onclick="promptSkipTest('${item.trackingNumber}', '${item.age}')" title="Skip this test age">Skip</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function updateAgeReminderBanner(m){
+  const container = document.getElementById('tt-age-badges');
+  if(!container || !m) return;
+
+  const existingTests = testsFor(m.trackingNumber);
+  const existingSkips = (state.skippedTests || []).filter(s => s.trackingNumber === m.trackingNumber);
+  const activeAges = m.activeAges || ['3 Days', '7 Days', '14 Days', '28 Days'];
+  const allAges = ['3 Days', '7 Days', '14 Days', '28 Days'];
+
+  container.innerHTML = allAges.map(age => {
+    const isCompleted = existingTests.some(t => t.testingAge === age);
+    const isSkipped = existingSkips.some(s => s.skippedAge === age);
+    const isActive = activeAges.includes(age);
+
+    if(isCompleted){
+      return `<span class="badge badge-green" style="font-size:11.5px; padding:4px 10px;">${age} [Completed]</span>`;
+    } else if(isSkipped){
+      return `<span class="badge badge-amber" style="font-size:11.5px; padding:4px 10px;">${age} [Skipped]</span>`;
+    } else if(isActive){
+      return `<span class="badge badge-blue" style="font-size:11.5px; padding:4px 10px;">${age} [Pending]</span>`;
+    } else {
+      return `<span class="badge badge-grey" style="font-size:11.5px; padding:4px 10px; opacity:0.6;">${age} [Not Required]</span>`;
+    }
+  }).join('');
+}
+
+function recallForTesting(){
+  const tn = document.getElementById('test-search').value;
+  const m = findMaster(tn);
+  if(!m){ toast('Tracking Number not found.'); document.getElementById('testing-body').style.display='none'; return; }
+  currentTestingTN = m.trackingNumber;
+  const d = computeDerived(m);
+  document.getElementById('testing-body').style.display='block';
+  document.getElementById('tt-tn').textContent = m.trackingNumber;
+  document.getElementById('tt-date').textContent = fmtDate(m.castingDate);
+  document.getElementById('tt-customer').textContent = m.customer || '—';
+  document.getElementById('tt-site').textContent = m.site;
+  document.getElementById('tt-volume').textContent = m.volume != null ? `${m.volume} m³` : '—';
+  document.getElementById('tt-weather').textContent = m.weather || '—';
+  document.getElementById('tt-design').textContent = m.designCode;
+  document.getElementById('tt-grade').textContent = `${m.grade} (${gradeTarget(m.grade)||'—'} N/mm²)`;
+  document.getElementById('tt-slump').textContent = m.slump || '—';
+  document.getElementById('tt-cement').textContent = m.cementContent ? `${m.cementContent} kg/m³` : '—';
+  document.getElementById('tt-silo').textContent = m.cementSilo || '—';
+  document.getElementById('tt-bulk').textContent = m.bulkNumber || '—';
+  document.getElementById('tt-castedby').textContent = m.castedBy || '—';
+  document.getElementById('tt-completed').textContent = `${d.testsCompleted} / ${m.numCubes}`;
+  document.getElementById('tt-e-date').valueAsDate = new Date();
+  if(currentUser) document.getElementById('tt-e-testedby').value = currentUser.username;
+  
+  updateAgeReminderBanner(m);
+  clearTestingForm();
+}
+
+function jumpToTesting(trackingNumber){
+  showView('testing');
+  document.getElementById('test-search').value = trackingNumber;
+  recallForTesting();
+  document.getElementById('tt-e-date').valueAsDate = new Date();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function addSampleLoadField(loadVal = '', weightVal = ''){
+  const container = document.getElementById('load-inputs-container');
+  const count = container.querySelectorAll('.load-input-row').length + 1;
+  const div = document.createElement('div');
+  div.className = 'load-input-row';
+  div.style.cssText = 'display:flex;gap:10px;margin-bottom:8px;align-items:center;';
+  div.innerHTML = `
+    <input type="number" class="tt-e-load-item" min="0" step="0.01" placeholder="Sample ${count} Load (kN), e.g. 742.5" value="${loadVal}" oninput="updateTestPreview()" style="flex:1;">
+    <input type="number" class="tt-e-weight-item" min="0" step="0.01" placeholder="Weight (kg), e.g. 8.25" value="${weightVal}" style="width:160px;">
+    ${count > 1 ? `<button type="button" class="btn btn-danger btn-sm" style="padding:5px 9px;" onclick="this.parentElement.remove(); updateTestPreview();" title="Remove sample">✕</button>` : ''}
+  `;
+  container.appendChild(div);
+  updateTestPreview();
+}
+
+function clearTestingForm(){
+  document.getElementById('tt-e-date').valueAsDate = new Date();
+  const container = document.getElementById('load-inputs-container');
+  container.innerHTML = `
+    <div class="load-input-row" style="display:flex;gap:10px;margin-bottom:8px;align-items:center;">
+      <input type="number" class="tt-e-load-item" min="0" step="0.01" placeholder="Sample 1 Load (kN), e.g. 742.5" oninput="updateTestPreview()" style="flex:1;">
+      <input type="number" class="tt-e-weight-item" min="0" step="0.01" placeholder="Weight (kg), e.g. 8.25" style="width:160px;">
+    </div>
+  `;
+  document.getElementById('tt-e-testedby').value = currentUser ? currentUser.username : '';
+  document.getElementById('tt-e-cubesize').value = 150;
+  document.getElementById('tt-preview').textContent = '—';
+}
+
+function resetTestingEntryForm(){
+  document.getElementById('test-search').value = '';
+  document.getElementById('testing-body').style.display = 'none';
+  currentTestingTN = null;
+  clearTestingForm();
+}
+
+function updateTestPreview(){
+  const m = findMaster(currentTestingTN);
+  if(!m) return;
+  const date = document.getElementById('tt-e-date').value;
+  const loadRows = Array.from(document.querySelectorAll('.load-input-row'));
+  const sampleItems = loadRows.map(row=>{
+    const load = parseFloat(row.querySelector('.tt-e-load-item').value);
+    const weight = parseFloat(row.querySelector('.tt-e-weight-item').value) || 8.25;
+    return { load, weight };
+  }).filter(s=>!isNaN(s.load) && s.load>=0);
+
+  if(!date || sampleItems.length === 0){
+    document.getElementById('tt-preview').textContent = '—';
+    return;
+  }
+  const age = detectAge(m.castingDate, date);
+  const strengths = sampleItems.map(item=>Math.round((item.load/22.5)*100)/100);
+  const avgStrength = strengths.reduce((s,v)=>s+v,0)/strengths.length;
+  
+  document.getElementById('tt-preview').textContent = `${age} · ${sampleItems.length} Sample(s) · Avg: ${avgStrength.toFixed(2)} N/mm² (Loads: ${sampleItems.map(i=>i.load).join(', ')} kN)`;
+}
+document.getElementById('tt-e-date').addEventListener('change', updateTestPreview);
+
+function saveTestResult(){
+  if(!currentUser){ applyRoleRestrictions(); return; }
+
+  const m = findMaster(currentTestingTN);
+  if(!m){ toast('Recall a record first.'); return; }
+  const date = document.getElementById('tt-e-date').value;
+  const testedBy = document.getElementById('tt-e-testedby').value.trim() || currentUser.username;
+  const loadRows = Array.from(document.querySelectorAll('.load-input-row'));
+  const sampleItems = loadRows.map(row=>{
+    const load = parseFloat(row.querySelector('.tt-e-load-item').value);
+    const weight = parseFloat(row.querySelector('.tt-e-weight-item').value) || 8.25;
+    return { load, weight };
+  }).filter(s=>!isNaN(s.load) && s.load>=0);
+
+  const cubeSize = parseFloat(document.getElementById('tt-e-cubesize').value) || 150;
+
+  if(!date){ toast('Testing Date is required.'); return; }
+  if(!testedBy){ toast('Tested By is required.'); return; }
+  if(sampleItems.length === 0){ toast('At least one valid positive Failure Load (kN) sample is required.'); return; }
+
+  const existing = testsFor(m.trackingNumber);
+  if(existing.length + sampleItems.length > m.numCubes){
+    toast(`Cannot save ${sampleItems.length} sample(s). Only ${m.numCubes - existing.length} slot(s) remaining for this casting (Total Cast: ${m.numCubes}).`);
+    return;
+  }
+
+  const age = detectAge(m.castingDate, date);
+  let sampleStrengths = [];
+
+  sampleItems.forEach((item, idx) => {
+    const strength = Math.round((item.load / 22.5) * 100) / 100;
+    sampleStrengths.push(strength);
+    const testId = `${m.trackingNumber}-T${existing.length + idx + 1}`;
+    state.tests.push({
+      testId,
+      trackingNumber: m.trackingNumber,
+      testingDate: date,
+      testingAge: age,
+      testedBy,
+      load: item.load,
+      weight: item.weight,
+      cubeSize,
+      strength,
+      designCode: m.designCode,
+      grade: m.grade
+    });
+  });
+
+  m.lastUpdated = new Date().toISOString();
+  const avgStr = sampleStrengths.reduce((s, v) => s + v, 0) / sampleStrengths.length;
+
+  logActivity(
+    "Test Recorded",
+    m.trackingNumber,
+    testedBy,
+    `Recorded ${sampleItems.length} sample(s) for ${age} test (Avg: ${avgStr.toFixed(2)} N/mm²)`
+  );
+
+  saveState();
+  updateSuggestions();
+  renderTestingSidebarList();
+  toast(`Saved ${sampleItems.length} sample test record(s) for ${age} (Avg ${avgStr.toFixed(2)} N/mm²).`);
+  resetTestingEntryForm();
+}
+
+/* ---------------------- HOME VIEW ---------------------- */
+function renderHome(){
+  const sched = buildSchedule();
+  const overdue = sched.filter(s=>s.status==='Overdue').length;
+  const dueToday = sched.filter(s=>s.status==='Due Today').length;
+  const totalCubes = state.master.reduce((s,m)=>s+m.numCubes,0);
+  const pending = sched.filter(s=>s.status!=='Completed').length;
+
+  const kpis = [
+    {label:'Total Cubes', value:totalCubes},
+    {label:'Castings on File', value:state.master.length},
+    {label:'Pending Tests', value:pending},
+    {label:"Due Today", value:dueToday, cls: dueToday>0?'amber':''},
+    {label:'Overdue', value:overdue, cls: overdue>0?'warn':'good'},
+    {label:'Tests Recorded', value:state.tests.length},
+  ];
+  document.getElementById('home-kpis').innerHTML = kpis.map(k=>`
+    <div class="kpi"><div class="label">${k.label}</div><div class="value ${k.cls||''}">${k.value}</div></div>
+  `).join('');
+
+  const recent = [...state.master].sort((a,b)=>new Date(b.dateCreated)-new Date(a.dateCreated));
+  document.getElementById('home-recent').innerHTML = recent.length ? `
+    <table><thead><tr><th>Tracking No.</th><th>Site</th><th>Grade</th><th>Cast Date</th></tr></thead>
+    <tbody>${recent.map(m=>`<tr><td><a href="#" onclick="jumpToRecall('${m.trackingNumber}'); return false;" class="tn-link">${m.trackingNumber}</a></td><td>${escapeHtml(m.site)}</td><td>${escapeHtml(m.grade)}</td><td>${fmtDate(m.castingDate)}</td></tr>`).join('')}</tbody></table>
+  ` : `<div class="empty-state"><div class="ic">&#9744;</div>No castings recorded yet.</div>`;
+
+  const dueSoon = sched.filter(s=>s.status!=='Completed' && s.daysRemaining<=7 && s.daysRemaining>=-90)
+                        .sort((a,b)=>a.daysRemaining-b.daysRemaining);
+  document.getElementById('home-due').innerHTML = dueSoon.length ? `
+    <table><thead><tr><th>Tracking No.</th><th>Age</th><th>Due Date</th><th>Status</th></tr></thead>
+    <tbody>${dueSoon.map(s=>`<tr><td><a href="#" onclick="jumpToRecall('${s.trackingNumber}'); return false;" class="tn-link">${s.trackingNumber}</a></td><td>${s.age}</td><td>${fmtDate(s.dueDate)}</td><td>${statusBadge(s.status)}</td></tr>`).join('')}</tbody></table>
+  ` : `<div class="empty-state"><div class="ic">&#10003;</div>No tests due this week.</div>`;
+}
+
+function statusBadge(status){
+  const map = {
+    Completed:'green', Overdue:'red', 'Due Today':'amber', Future:'blue', Open:'grey', 'Partially Tested':'amber', Pass:'green', Fail:'red', Pending:'grey',
+    'New Entry':'blue', 'Test Recorded':'green', 'Record Updated':'amber', 'Record Deleted':'red', 'User Login':'purple', 'User Logout':'grey', 'User Created':'purple', 'User Updated':'amber', 'User Deleted':'red', 'Excel Export':'purple', 'Backup Download':'purple', 'Backup Restore':'blue', 'Data Reset':'red'
+  };
+  return `<span class="badge badge-${map[status]||'grey'}">${status}</span>`;
+}
+
+/* ---------------------- TESTING SCHEDULE VIEW ---------------------- */
+function renderSchedule(){
+  const filter = (document.getElementById('sched-filter').value||'').toLowerCase();
+  const statusFilter = document.getElementById('sched-status-filter').value;
+  let rows = buildSchedule();
+  if(filter) rows = rows.filter(r=>[r.trackingNumber,r.site,r.grade,r.designCode].join(' ').toLowerCase().includes(filter));
+  if(statusFilter) rows = rows.filter(r=>r.status===statusFilter);
+  rows.sort((a,b)=> new Date(a.dueDate) - new Date(b.dueDate));
+
+  const table = document.getElementById('schedule-table');
+  table.querySelector('thead').innerHTML = `<tr><th>Tracking No.</th><th>Cast Date</th><th>Due Date</th><th>Age</th><th>Site</th><th>Grade</th><th>Design Code</th><th>Technician</th><th>Status</th><th>Action</th></tr>`;
+  table.querySelector('tbody').innerHTML = rows.length ? rows.map(r=>`
+    <tr>
+      <td><a href="#" onclick="jumpToRecall('${r.trackingNumber}'); return false;" class="tn-link">${r.trackingNumber}</a></td><td>${fmtDate(r.castingDate)}</td><td>${fmtDate(r.dueDate)}</td>
+      <td>${r.age}</td><td>${r.site}</td><td>${r.grade}</td><td>${r.designCode}</td>
+      <td>${r.technician||'—'}</td><td>${statusBadge(r.status)}</td>
+      <td>${r.status !== 'Completed' ? `<button class="btn btn-sm btn-primary" onclick="jumpToTesting('${r.trackingNumber}')">Record Test</button>` : '—'}</td>
+    </tr>`).join('') : `<tr><td colspan="10"><div class="empty-state">No schedule items match your search.</div></td></tr>`;
+}
+
+/* ---------------------- DASHBOARD VIEW & ENGINEERING QC TABLES ---------------------- */
+
+function populateDashboardFilterDropdowns(){
+  const gradeSelect = document.getElementById('dash-grade');
+  const custSelect = document.getElementById('dash-customer');
+  if(!gradeSelect || !custSelect) return;
+
+  const currentGrade = gradeSelect.value;
+  const currentCust = custSelect.value;
+
+  const grades = [...new Set(state.master.map(m => (m.grade || '').trim()).filter(Boolean))].sort();
+  const customers = [...new Set(state.master.map(m => (m.customer || '').trim()).filter(Boolean))].sort();
+
+  gradeSelect.innerHTML = `<option value="">All Grades</option>` + grades.map(g => `<option value="${escapeHtml(g)}" ${g===currentGrade?'selected':''}>${escapeHtml(g)}</option>`).join('');
+  custSelect.innerHTML = `<option value="">All Customers</option>` + customers.map(c => `<option value="${escapeHtml(c)}" ${c===currentCust?'selected':''}>${escapeHtml(c)}</option>`).join('');
+}
+
+function clearDashboardFilters(){
+  if(document.getElementById('dash-start')) document.getElementById('dash-start').value = '';
+  if(document.getElementById('dash-end')) document.getElementById('dash-end').value = '';
+  if(document.getElementById('dash-grade')) document.getElementById('dash-grade').value = '';
+  if(document.getElementById('dash-customer')) document.getElementById('dash-customer').value = '';
+  renderDashboard();
+}
+
+function renderDashboard(){
+  populateDashboardFilterDropdowns();
+
+  const startVal = document.getElementById('dash-start') ? document.getElementById('dash-start').value : '';
+  const endVal = document.getElementById('dash-end') ? document.getElementById('dash-end').value : '';
+  const gradeVal = document.getElementById('dash-grade') ? document.getElementById('dash-grade').value : '';
+  const custVal = document.getElementById('dash-customer') ? document.getElementById('dash-customer').value : '';
+
+  let filteredMaster = state.master;
+
+  if(startVal){
+    filteredMaster = filteredMaster.filter(m => m.castingDate >= startVal);
+  }
+  if(endVal){
+    filteredMaster = filteredMaster.filter(m => m.castingDate <= endVal);
+  }
+  if(gradeVal){
+    filteredMaster = filteredMaster.filter(m => m.grade === gradeVal);
+  }
+  if(custVal){
+    filteredMaster = filteredMaster.filter(m => m.customer === custVal);
+  }
+
+  const filteredTNSet = new Set(filteredMaster.map(m => m.trackingNumber));
+  const filteredTests = state.tests.filter(t => filteredTNSet.has(t.trackingNumber));
+
+  // Schedule status calculation for filtered set
+  const sched = [];
+  const today = new Date(); today.setHours(0,0,0,0);
+  const todayStr = today.toISOString().slice(0,10);
+
+  filteredMaster.forEach(m=>{
+    STANDARD_AGES.forEach(age=>{
+      const due = addDays(m.castingDate, age.days);
+      const dueStr = due.toISOString().slice(0,10);
+      const completedTest = filteredTests.find(t=>t.trackingNumber===m.trackingNumber && t.testingAge===age.label);
+
+      let status;
+      if(completedTest){ status='Completed'; }
+      else if(dueStr < todayStr){ status='Overdue'; }
+      else if(dueStr === todayStr){ status='Due Today'; }
+      else{ status='Future'; }
+
+      sched.push({ status });
+    });
+  });
+
+  const overdue = sched.filter(s=>s.status==='Overdue').length;
+  const dueToday = sched.filter(s=>s.status==='Due Today').length;
+  const pending = sched.filter(s=>s.status!=='Completed').length;
+
+  const withDerived = filteredMaster.map(m=>({m, d:computeDerived(m)}));
+  const matureRows = withDerived.filter(x=>x.d.avgStrength!=null);
+  const avgStrength = matureRows.length ? matureRows.reduce((s,x)=>s+x.d.avgStrength,0)/matureRows.length : 0;
+  const passCount = matureRows.filter(x=>x.d.passFail==='Pass').length;
+  const failCount = matureRows.filter(x=>x.d.passFail==='Fail').length;
+
+  const passPct = (passCount+failCount) ? (passCount/(passCount+failCount)*100) : 0;
+  const failPct = (passCount+failCount) ? (failCount/(passCount+failCount)*100) : 0;
+
+  const gradeCounts = {};
+  filteredMaster.forEach(m=>gradeCounts[m.grade]=(gradeCounts[m.grade]||0)+1);
+  const mostGrade = Object.entries(gradeCounts).sort((a,b)=>b[1]-a[1])[0];
+  const avgCement = filteredMaster.length ? filteredMaster.reduce((s,m)=>s+parseFloat(m.cementContent||0),0)/filteredMaster.length : 0;
+
+  const kpis = [
+    {label:'Total Cubes', value: filteredMaster.reduce((s,m)=>s+(parseInt(m.numCubes,10)||0),0)},
+    {label:'Pending Tests', value: pending},
+    {label:'Due Today', value: dueToday, cls: dueToday>0?'amber':''},
+    {label:'Overdue', value: overdue, cls: overdue>0?'warn':'good'},
+    {label:'Avg 28d Strength', value: avgStrength.toFixed(1)+' N/mm²'},
+    {label:'Pass %', value: passPct.toFixed(1)+'%', cls:'good'},
+    {label:'Fail %', value: failPct.toFixed(1)+'%', cls: failPct>0?'warn':''},
+    {label:'Most Used Grade', value: mostGrade? mostGrade[0] : '—'},
+    {label:'Avg Cement Content', value: avgCement.toFixed(0)+' kg/m³'},
+    {label:'Castings Filtered', value: filteredMaster.length},
+    {label:'Tests Recorded', value: filteredTests.length},
+    {label:'28-Day Results', value: matureRows.length},
+  ];
+
+  const kpisEl = document.getElementById('dash-kpis');
+  if(kpisEl){
+    kpisEl.innerHTML = kpis.map(k=>`
+      <div class="kpi"><div class="label">${k.label}</div><div class="value ${k.cls||''}">${k.value}</div></div>
+    `).join('');
+  }
+
+  // 1. Render Table A: Age-wise Strength Development (Hydration Analysis)
+  renderDashboardAgeTable(filteredTests);
+
+  // 2. Render Table B: Grade-wise Performance Summary
+  renderDashboardGradeTable(filteredMaster);
+
+  // 3. Render Table C: Technician & Laboratory Testing Breakdown
+  renderDashboardTechTable(filteredTests);
+
+  // 4. Render Engineering Interpretation Text
+  const logPoints = STANDARD_AGES.map(a=>{
+    const vals = filteredTests.filter(t=>t.testingAge===a.label).map(t=>parseFloat(t.strength)).filter(v=>!isNaN(v));
+    const avg = vals.length ? parseFloat((vals.reduce((s,v)=>s+v,0)/vals.length).toFixed(2)) : null;
+    return avg !== null ? { x: a.days, y: avg } : null;
+  }).filter(Boolean);
+
+  renderInterpretation(filteredMaster, matureRows, passCount, failCount, passPct, gradeVal, custVal, startVal, endVal, logPoints);
+}
+
+/* ---- Table A: Age-wise Strength Development ---- */
+function renderDashboardAgeTable(filteredTests){
+  const tbody = document.querySelector('#dash-tbl-age tbody');
+  if(!tbody) return;
+
+  const ages = ['3 Days', '7 Days', '14 Days', '28 Days'];
+
+  tbody.innerHTML = ages.map(age => {
+    const tests = filteredTests.filter(t => t.testingAge === age);
+    const vals = tests.map(t => parseFloat(t.strength)).filter(v => !isNaN(v));
+    
+    if(!vals.length){
+      return `
+        <tr>
+          <td><strong>${age}</strong></td>
+          <td style="text-align:right;">0</td>
+          <td style="text-align:right;" class="mono">—</td>
+          <td style="text-align:right;" class="mono">—</td>
+          <td style="text-align:right;" class="mono">—</td>
+          <td><span class="badge badge-grey">No Test Data</span></td>
+        </tr>
+      `;
+    }
+
+    const avg = (vals.reduce((s,v)=>s+v,0)/vals.length).toFixed(2);
+    const min = Math.min(...vals).toFixed(2);
+    const max = Math.max(...vals).toFixed(2);
+
+    let badgeCls = 'badge-blue';
+    let statusText = 'Normal Early Gain';
+    if(age === '7 Days') statusText = 'Normal Hydration';
+    if(age === '14 Days') { badgeCls = 'badge-amber'; statusText = 'Intermediate Gain'; }
+    if(age === '28 Days') { badgeCls = 'badge-green'; statusText = 'Mature Characteristic'; }
+
+    return `
+      <tr>
+        <td><strong>${age}</strong></td>
+        <td style="text-align:right;" class="mono">${vals.length}</td>
+        <td style="text-align:right;font-weight:700;" class="mono">${avg} N/mm²</td>
+        <td style="text-align:right;" class="mono">${min}</td>
+        <td style="text-align:right;" class="mono">${max}</td>
+        <td><span class="badge ${badgeCls}">${statusText}</span></td>
+      </tr>
+    `;
+  }).join('');
+}
+
+/* ---- Table B: Grade-wise Performance Summary ---- */
+function renderDashboardGradeTable(filteredMaster){
+  const tbody = document.querySelector('#dash-tbl-grade tbody');
+  if(!tbody) return;
+
+  const distinctGrades = [...new Set(filteredMaster.map(m => (m.grade || '').trim()).filter(Boolean))].sort();
+
+  if(!distinctGrades.length){
+    tbody.innerHTML = `<tr><td colspan="5"><div class="empty-state" style="padding:16px;">No grade data found.</div></td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = distinctGrades.map(grade => {
+    const target = gradeTarget(grade);
+    const masters = filteredMaster.filter(m => m.grade === grade);
+    const matureDerived = masters.map(m => computeDerived(m)).filter(d => d.avgStrength != null);
+    
+    const count = matureDerived.length;
+    const avg28d = count ? (matureDerived.reduce((s,d)=>s+d.avgStrength,0)/count).toFixed(2) : null;
+    const passCount = matureDerived.filter(d => d.passFail === 'Pass').length;
+    const failCount = matureDerived.filter(d => d.passFail === 'Fail').length;
+    
+    const passPct = count ? Math.round((passCount/count)*100) : 0;
+    const failPct = count ? (100 - passPct) : 0;
+
+    let badgeHtml = '<span class="badge badge-grey">Pending</span>';
+    if(count > 0){
+      if(failCount > 0){
+        badgeHtml = `<span class="badge badge-red">${passPct}% Pass / ${failPct}% Fail</span>`;
+      } else {
+        badgeHtml = `<span class="badge badge-green">${passPct}% Pass</span>`;
+      }
+    }
+
+    return `
+      <tr>
+        <td><strong>${escapeHtml(grade)}</strong></td>
+        <td style="text-align:right;" class="mono">${target != null ? target + ' N/mm²' : '—'}</td>
+        <td style="text-align:right;" class="mono">${masters.length}</td>
+        <td style="text-align:right;font-weight:700;" class="mono">${avg28d ? avg28d + ' N/mm²' : '—'}</td>
+        <td>${badgeHtml}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+/* ---- Table C: Technician & Laboratory Testing Breakdown ---- */
+function renderDashboardTechTable(filteredTests){
+  const tbody = document.querySelector('#dash-tbl-tech tbody');
+  if(!tbody) return;
+
+  const techs = [...new Set(filteredTests.map(t => (t.testedBy || '').trim()).filter(Boolean))].sort();
+
+  if(!techs.length){
+    tbody.innerHTML = `<tr><td colspan="4"><div class="empty-state" style="padding:16px;">No technician test records in this filter range.</div></td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = techs.map(tech => {
+    const techTests = filteredTests.filter(t => t.testedBy === tech);
+    const vals = techTests.map(t => parseFloat(t.strength)).filter(v => !isNaN(v));
+    const avg = vals.length ? (vals.reduce((s,v)=>s+v,0)/vals.length).toFixed(2) : '—';
+    const roleBadge = tech.toLowerCase().includes('admin') || tech.toLowerCase().includes('qc') 
+      ? '<span class="badge badge-purple">QC Verified</span>' 
+      : '<span class="badge badge-blue">Active Technician</span>';
+
+    return `
+      <tr>
+        <td><strong>${escapeHtml(tech)}</strong></td>
+        <td style="text-align:right;" class="mono">${techTests.length}</td>
+        <td style="text-align:right;font-weight:700;" class="mono">${avg !== '—' ? avg + ' N/mm²' : '—'}</td>
+        <td>${roleBadge}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function renderInterpretation(filteredMaster, matureRows, passCount, failCount, passPct, gradeVal, custVal, startVal, endVal, logPoints){
+  let interp = '';
+
+  const filterDesc = [];
+  if(gradeVal) filterDesc.push(`Grade <strong>${gradeVal}</strong>`);
+  if(custVal) filterDesc.push(`Customer <strong>${custVal}</strong>`);
+  if(startVal || endVal) filterDesc.push(`Date Range <strong>${fmtDate(startVal)||"Start"} to ${fmtDate(endVal)||"Present"}</strong>`);
+
+  const scopeText = filterDesc.length ? `[Filtered Scope: ${filterDesc.join(' · ')}]` : `[All Plant Batches Scope]`;
+
+  const validAverages = (logPoints||[]).map(p=>p.y);
+  if(validAverages.length >= 2){
+    const increasing = validAverages.every((v,i)=> i===0 || v >= validAverages[i-1]);
+    interp = `<strong>Hydration Trend ${scopeText}:</strong> ${increasing
+      ? 'Concrete strength gain follows a standard log-time curve from 3-day through 28-day testing, fully consistent with BS EN 12390 characteristic strength progression.'
+      : 'Strength gain curve shows non-monotonic readings across ages. Verify laboratory curing conditions, compaction, or machine calibration.'}`;
+  } else {
+    interp = `<strong>Hydration Trend ${scopeText}:</strong> Insufficient test age data in this filtered set to plot a complete 3/7/14/28-day hydration curve. Record additional test results to generate full engineering curve.`;
+  }
+
+  if(matureRows.length){
+    interp += `<br><strong>Quality Compliance:</strong> ${passPct.toFixed(1)}% of 28-day mature test sets (${passCount}/${passCount+failCount}) meet or exceed their specified characteristic strength target (${filteredMaster.length} total batch(es) evaluated).`;
+  } else {
+    interp += `<br><strong>Quality Compliance:</strong> No 28-day mature test results available for the selected filters yet.`;
+  }
+
+  const interpEl = document.getElementById('dash-interpretation');
+  if(interpEl) interpEl.innerHTML = interp;
+}
+
+window.addEventListener('load', () => {
+  const dashView = document.getElementById('view-dashboard');
+  if(dashView && dashView.classList.contains('active')){
+    renderDashboard();
+  }
+});
+
+/* ---------------------- REPORTS VIEW & DYNAMIC FILTERING ---------------------- */
+function filterReportTrackingNumbers(){
+  const custVal = (document.getElementById('rep-customer') ? document.getElementById('rep-customer').value : '').trim().toLowerCase();
+  const select = document.getElementById('rep-tn');
+  if(!select) return;
+
+  const currentSelected = select.value;
+  let matches = state.master;
+
+  if(custVal){
+    matches = matches.filter(m => (m.customer || '').toLowerCase().includes(custVal));
+  }
+
+  matches = [...matches].sort((a,b) => new Date(b.castingDate) - new Date(a.castingDate));
+
+  if(!matches.length){
+    select.innerHTML = `<option value="">No tracking numbers found for "${escapeHtml(custVal)}"</option>`;
+    return;
+  }
+
+  let optionsHtml = `<option value="">Select Tracking Number (${matches.length} available)…</option>`;
+  optionsHtml += matches.map(m => {
+    const custLabel = m.customer ? ` [${m.customer}]` : '';
+    const sel = (m.trackingNumber === currentSelected) ? 'selected' : '';
+    return `<option value="${m.trackingNumber}" ${sel}>${m.trackingNumber}${custLabel} — ${m.site} (${m.grade})</option>`;
+  }).join('');
+
+  select.innerHTML = optionsHtml;
+}
+
+function generateCubeReport(){
+  const tnSelect = document.getElementById('rep-tn');
+  const tn = tnSelect ? tnSelect.value : '';
+  if(!tn){
+    toast('Please select a Tracking Number from the dropdown.');
+    return;
+  }
+
+  const selectedAge = document.getElementById('rep-age') ? document.getElementById('rep-age').value : 'All Ages';
+  const m = findMaster(tn);
+  if(!m){ toast('Tracking Number not found.'); return; }
+  const d = computeDerived(m);
+  const allTests = testsFor(m.trackingNumber);
+  
+  // Filter test results by selected age (unless "All Ages")
+  const filteredTests = (selectedAge === 'All Ages') ? allTests : allTests.filter(t=>t.testingAge === selectedAge);
+  
+  const printStampTime = fmtDateTime(new Date());
+  const printUser = currentUser ? currentUser.username : 'Guest';
+
+  // Average Compressive Strength calculation
+  const avgStrengthVal = filteredTests.length ? (filteredTests.reduce((s,t)=>s+t.strength,0)/filteredTests.length).toFixed(2) : '—';
+  
+  // Metadata fields mapping
+  const repTestingDate = filteredTests.length ? fmtDate(filteredTests[0].testingDate) : '—';
+  const repTestingAge = selectedAge !== 'All Ages' ? selectedAge : (filteredTests.length ? filteredTests[0].testingAge : '—');
+  const repTestedBy = filteredTests.length ? filteredTests[0].testedBy : (currentUser ? currentUser.username : 'Lab Technician');
+
+  const rowsHtml = filteredTests.length ? filteredTests.map((t, idx)=>`
+    <tr style="text-align:center;">
+      <td style="padding:6px 8px;border:1px solid var(--line);">${idx + 1}</td>
+      <td style="padding:6px 8px;border:1px solid var(--line);">${t.weight ? t.weight.toFixed(2) : '8.25'}</td>
+      <td style="padding:6px 8px;border:1px solid var(--line);">${t.load.toFixed(2)}</td>
+      <td style="padding:6px 8px;border:1px solid var(--line);font-weight:700;">${t.strength.toFixed(2)}</td>
+      <td style="padding:6px 8px;border:1px solid var(--line);font-family:var(--font-mono);font-size:11.5px;">${t.testId}</td>
+    </tr>
+  `).join('') : `<tr><td colspan="5" style="text-align:center;color:var(--ink-soft);padding:14px;border:1px solid var(--line);">No test results recorded for age "${selectedAge}".</td></tr>`;
+
+  document.getElementById('report-output').innerHTML = `
+    <div class="report-sheet official-report-sheet" style="font-family:var(--font-body);color:#000;">
+      
+      <!-- HEADER SECTION -->
+      <div style="text-align:center;border-bottom:2px solid var(--slate-deep);padding-bottom:12px;margin-bottom:14px;">
+        <div style="font-family:var(--font-display);font-weight:800;font-size:20px;color:var(--slate-deep);letter-spacing:0.03em;">TOKYO SUPER MIX (PVT) LTD</div>
+        <div style="font-weight:700;font-size:13.5px;color:var(--ink);margin-top:2px;">TOKYO SUPER MIX READY MIXED CONCRETE PLANT</div>
+        <div style="font-size:12px;color:var(--ink-soft);">Saliya Mawatha Anuradhapura</div>
+        <div style="font-size:11.5px;color:var(--ink-soft);margin-top:1px;">Tel/Fax: 025-2234193 &nbsp;|&nbsp; E-mail : Supermix.anurap@tokyocement.lk</div>
+      </div>
+
+      <div style="text-align:center;margin-bottom:16px;">
+        <div style="font-family:var(--font-display);font-weight:800;font-size:15px;color:var(--slate-deep);text-transform:uppercase;letter-spacing:0.04em;">CONCRETE COMPRESSIVE STRENGTH TEST REPORT</div>
+        <div style="font-size:11.5px;color:var(--ink-soft);font-style:italic;margin-top:2px;">(Specification Reference : BS 1881-116)</div>
+      </div>
+
+      <!-- METADATA SECTION (Formal Label : Value Alignment) -->
+      <table style="width:100%;border-collapse:collapse;margin-bottom:16px;font-size:12.5px;line-height:1.6;">
+        <tr>
+          <td style="width:18%;font-weight:600;padding:4px 0;">Customer</td>
+          <td style="width:32%;padding:4px 0;">: ${m.customer || m.site}</td>
+          <td style="width:20%;font-weight:600;padding:4px 0;">Date of test</td>
+          <td style="width:30%;padding:4px 0;">: ${repTestingDate}</td>
+        </tr>
+        <tr>
+          <td style="font-weight:600;padding:4px 0;">Project/Site</td>
+          <td style="padding:4px 0;">: ${m.site}</td>
+          <td style="font-weight:600;padding:4px 0;">Age of cubes at testing</td>
+          <td style="padding:4px 0;">: ${repTestingAge}</td>
+        </tr>
+        <tr>
+          <td style="font-weight:600;padding:4px 0;">Grade of concrete</td>
+          <td style="padding:4px 0;">: ${m.grade} (Target: ${gradeTarget(m.grade)||'—'} N/mm²)</td>
+          <td style="font-weight:600;padding:4px 0;">Dimensions of cube</td>
+          <td style="padding:4px 0;">: 150mm * 150mm * 150mm</td>
+        </tr>
+        <tr>
+          <td style="font-weight:600;padding:4px 0;">Slump</td>
+          <td style="padding:4px 0;">: ${m.slump}</td>
+          <td style="font-weight:600;padding:4px 0;">Location</td>
+          <td style="padding:4px 0;">: ${m.bulkNumber}${m.remarks ? ' ('+m.remarks+')' : ''}</td>
+        </tr>
+        <tr>
+          <td style="font-weight:600;padding:4px 0;">Casted Date</td>
+          <td style="padding:4px 0;">: ${fmtDate(m.castingDate)}</td>
+          <td style="font-weight:600;padding:4px 0;">Tracking Number</td>
+          <td style="padding:4px 0;font-family:var(--font-mono);font-weight:600;">: ${m.trackingNumber}</td>
+        </tr>
+      </table>
+
+      <!-- TEST RESULTS TABLE -->
+      <table style="width:100%;border-collapse:collapse;margin:14px 0;">
+        <thead>
+          <tr style="background:var(--surface-sunk);font-weight:700;font-size:12px;">
+            <th style="padding:8px;border:1px solid var(--line);text-align:center;">Cube No</th>
+            <th style="padding:8px;border:1px solid var(--line);text-align:center;">Weight (kg)</th>
+            <th style="padding:8px;border:1px solid var(--line);text-align:center;">Load at failure (kN)</th>
+            <th style="padding:8px;border:1px solid var(--line);text-align:center;">Compressive Strength (N/mm²)</th>
+            <th style="padding:8px;border:1px solid var(--line);text-align:center;">Remarks</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rowsHtml}
+        </tbody>
+      </table>
+
+      <!-- SUMMARY SECTION -->
+      <div style="margin:16px 0;padding:10px 14px;background:var(--surface-sunk);border:1px solid var(--line);border-radius:var(--radius-sm);font-size:13.5px;">
+        <strong>Average Compressive Strength :</strong> <span style="font-size:16px;font-weight:800;color:var(--slate-deep);font-family:var(--font-mono);">${avgStrengthVal}</span> <strong>N/mm²</strong>
+      </div>
+
+      <!-- SIGNATURE SECTION -->
+      <div class="sig-area" style="display:flex;justify-content:space-between;margin-top:40px;padding-top:10px;">
+        <div style="width:45%;font-size:12px;line-height:1.9;">
+          <div style="font-weight:700;color:var(--slate-deep);margin-bottom:4px;">Tested By (Lab Technician)</div>
+          <div>Name : <strong>${repTestedBy}</strong></div>
+          <div>Signature : …………………………………………………</div>
+        </div>
+        <div style="width:45%;font-size:12px;line-height:1.9;">
+          <div style="font-weight:700;color:var(--slate-deep);margin-bottom:4px;">Witnessed By</div>
+          <div>Name (QC) : …………………………………………………</div>
+          <div>Signature : …………………………………………………</div>
+        </div>
+      </div>
+
+      <!-- DOCUMENT CONTROL FOOTER & TIMESTAMP -->
+      <div style="margin-top:40px;display:flex;justify-content:space-between;align-items:flex-end;font-size:10.5px;color:var(--ink-soft);font-family:var(--font-mono);border-top:1px solid var(--line);padding-top:8px;">
+        <div>
+          <div>F/QAQC/30</div>
+          <div>Issue 3 Rev 0</div>
+          <div>01/09/2018</div>
+        </div>
+        <div style="text-align:right;">
+          Printed: ${printStampTime}<br>
+          User: ${printUser} | Tokyo Super Mix Anuradhapura
+        </div>
+      </div>
+
+      <div class="btn-row no-print" style="margin-top:24px;">
+        <button class="btn btn-primary" onclick="window.print()">🖨 Print / Save as PDF</button>
+      </div>
+
+      <!-- Bottom right 4px time date user print stamp -->
+      <div class="report-print-stamp">Printed: ${printStampTime} | User: ${printUser} | Tokyo Super Mix Anuradhapura BS EN 1881-116</div>
+    </div>
+  `;
+}
+
+function generateMonthlyReport(){
+  const dateVal = document.getElementById('rep-month').value;
+  if(!dateVal){ toast('Pick a date within the target month.'); return; }
+  const target = new Date(dateVal + 'T00:00:00');
+  const y = target.getFullYear(), mo = target.getMonth();
+  const printStampTime = fmtDateTime(new Date());
+  const printUser = currentUser ? currentUser.username : 'Guest';
+
+  const inMonth = state.master.filter(m=>{
+    const cd = new Date(m.castingDate + 'T00:00:00');
+    return cd.getFullYear()===y && cd.getMonth()===mo;
+  });
+
+  const withDerived = inMonth.map(m=>({m,d:computeDerived(m)}));
+  const gradeSummary = {}, siteSummary = {}, designSummary = {};
+  withDerived.forEach(x=>{
+    gradeSummary[x.m.grade] = (gradeSummary[x.m.grade]||0)+1;
+    siteSummary[x.m.site] = (siteSummary[x.m.site]||0)+1;
+    designSummary[x.m.designCode] = (designSummary[x.m.designCode]||0)+1;
+  });
+
+  const mature = withDerived.filter(x=>x.d.avgStrength!=null);
+  const avgStrength = mature.length ? mature.reduce((s,x)=>s+x.d.avgStrength,0)/mature.length : null;
+  const pending = withDerived.filter(x=>x.d.status!=='Completed').length;
+  const sched = buildSchedule().filter(s=>{
+    const cd = new Date(s.castingDate + 'T00:00:00');
+    return cd.getFullYear()===y && cd.getMonth()===mo;
+  });
+  const overdue = sched.filter(s=>s.status==='Overdue').length;
+
+  const listRows = (obj) => Object.entries(obj).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<tr><td>${k}</td><td><strong>${v}</strong></td></tr>`).join('') || `<tr><td colspan="2" style="color:var(--ink-soft)">No records</td></tr>`;
+
+  document.getElementById('report-output').innerHTML = `
+    <div class="report-sheet">
+      <div class="report-head">
+        <div class="logo">TOKYO SUPER MIX <span>(PVT) LTD</span></div>
+        <div class="doc-type">
+          <strong>MONTHLY CONCRETE QC SUMMARY</strong><br>
+          Period: ${target.toLocaleString('en-GB',{month:'long',year:'numeric'})}<br>
+          Generated: ${fmtDate(new Date())}
+        </div>
+      </div>
+
+      <div class="grid grid-2">
+        <div>
+          <h3 style="font-size:13px;color:var(--slate-deep);margin-bottom:6px;">Concrete Grade Breakdown</h3>
+          <table class="report-table"><tr><td class="k">Grade</td><td class="k">Cast Batches</td></tr>${listRows(gradeSummary)}</table>
+        </div>
+        <div>
+          <h3 style="font-size:13px;color:var(--slate-deep);margin-bottom:6px;">Supply Site Breakdown</h3>
+          <table class="report-table"><tr><td class="k">Site</td><td class="k">Cast Batches</td></tr>${listRows(siteSummary)}</table>
+        </div>
+      </div>
+
+      <h3 style="font-size:13px;color:var(--slate-deep);margin-top:14px;margin-bottom:6px;">Mix Design Code Summary</h3>
+      <table class="report-table"><tr><td class="k">Design Code</td><td class="k">Cast Batches</td></tr>${listRows(designSummary)}</table>
+
+      <h3 style="font-size:13px;color:var(--slate-deep);margin-top:14px;margin-bottom:6px;">Monthly Performance Overview</h3>
+      <table class="report-table">
+        <tr><td class="k">Total Cast Batches This Month</td><td>${inMonth.length}</td></tr>
+        <tr><td class="k">Total Cubes Cast</td><td>${inMonth.reduce((s,m)=>s+m.numCubes,0)}</td></tr>
+        <tr><td class="k">Average 28-day Compressive Strength</td><td style="font-weight:700;">${avgStrength!=null?avgStrength.toFixed(2)+' N/mm²':'No 28-day mature results yet'}</td></tr>
+        <tr><td class="k">Pending Schedule Tests</td><td>${pending}</td></tr>
+        <tr><td class="k">Overdue Tests</td><td>${overdue}</td></tr>
+      </table>
+
+      <div class="sig-area">
+        <div class="sig-line">Prepared By (QC Officer)</div>
+        <div class="sig-line">Approved By (Quality Manager)</div>
+      </div>
+
+      <div class="btn-row no-print" style="margin-top:24px;">
+        <button class="btn btn-primary" onclick="window.print()">🖨 Print / Save as PDF</button>
+      </div>
+
+      <!-- Bottom right 4px time date user print stamp -->
+      <div class="report-print-stamp">Printed: ${printStampTime} | User: ${printUser} | Tokyo Super Mix Anuradhapura BS EN 1881-116</div>
+    </div>
+  `;
+}
+
+/* ---------------------- DAILY PRODUCTION & QA REPORT VIEW ---------------------- */
+function renderDailyReport(){
+  const startVal = document.getElementById('daily-start').value;
+  const endVal = document.getElementById('daily-end').value;
+  
+  let records = state.master;
+  if(startVal){
+    records = records.filter(m => m.castingDate >= startVal);
+  }
+  if(endVal){
+    records = records.filter(m => m.castingDate <= endVal);
+  }
+  
+  records.sort((a,b) => new Date(a.castingDate) - new Date(b.castingDate));
+  
+  const tbody = document.querySelector('#daily-table tbody');
+  if(!records.length){
+    tbody.innerHTML = `<tr><td colspan="14"><div class="empty-state"><div class="ic">&#128202;</div>No production records found for the selected date range.</div></td></tr>`;
+    return;
+  }
+  
+  tbody.innerHTML = records.map((m, idx) => {
+    const tests = testsFor(m.trackingNumber);
+    
+    // 7-Day tests
+    const tests7d = tests.filter(t => t.testingAge === '7 Days');
+    const date7d = tests7d.length ? fmtDate(tests7d[0].testingDate) : '—';
+    const str7d = tests7d.length ? (tests7d.reduce((s,t) => s + t.strength, 0) / tests7d.length).toFixed(2) : '—';
+    
+    // 28-Day tests
+    const tests28d = tests.filter(t => t.testingAge === '28 Days');
+    const date28d = tests28d.length ? fmtDate(tests28d[0].testingDate) : '—';
+    const str28d = tests28d.length ? (tests28d.reduce((s,t) => s + t.strength, 0) / tests28d.length).toFixed(2) : '—';
+    
+    return `
+      <tr>
+        <td>${idx + 1}</td>
+        <td class="mono">${fmtDate(m.castingDate)}</td>
+        <td><strong>${m.customer || '—'}</strong></td>
+        <td>${m.site}</td>
+        <td>${m.weather || '—'}</td>
+        <td>${m.grade}</td>
+        <td>${m.designCode}</td>
+        <td>${m.cementContent}</td>
+        <td>${m.volume != null ? m.volume : '—'}</td>
+        <td class="mono">${date7d}</td>
+        <td style="font-weight:600;">${str7d}</td>
+        <td class="mono">${date28d}</td>
+        <td style="font-weight:700;color:var(--slate-deep);">${str28d}</td>
+        <td>${m.slump}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function exportDailyExcel(){
+  const startVal = document.getElementById('daily-start').value;
+  const endVal = document.getElementById('daily-end').value;
+  
+  let records = state.master;
+  if(startVal) records = records.filter(m => m.castingDate >= startVal);
+  if(endVal) records = records.filter(m => m.castingDate <= endVal);
+  
+  if(!records.length){ toast('No production data to export.'); return; }
+  
+  records.sort((a,b) => new Date(a.castingDate) - new Date(b.castingDate));
+  
+  const excelRows = records.map((m, idx) => {
+    const tests = testsFor(m.trackingNumber);
+    const tests7d = tests.filter(t => t.testingAge === '7 Days');
+    const tests28d = tests.filter(t => t.testingAge === '28 Days');
+    
+    return {
+      'No': idx + 1,
+      'Casting Date': fmtDate(m.castingDate),
+      'Customer': m.customer || '',
+      'Site Location': m.site,
+      'Weather': m.weather || '',
+      'Grade': m.grade,
+      'Design Code': m.designCode,
+      'Cement (kg)': m.cementContent,
+      'Volume (m3)': m.volume != null ? m.volume : '',
+      '7Day Date': tests7d.length ? fmtDate(tests7d[0].testingDate) : '',
+      '7Day Strength (N/mm2)': tests7d.length ? (tests7d.reduce((s,t) => s + t.strength, 0) / tests7d.length).toFixed(2) : '',
+      '28Day Date': tests28d.length ? fmtDate(tests28d[0].testingDate) : '',
+      '28Day Strength (N/mm2)': tests28d.length ? (tests28d.reduce((s,t) => s + t.strength, 0) / tests28d.length).toFixed(2) : '',
+      'Slump': m.slump
+    };
+  });
+  
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(excelRows);
+  XLSX.utils.book_append_sheet(wb, ws, 'Daily Production QA');
+  XLSX.writeFile(wb, `Daily_Production_QA_Report_${new Date().toISOString().slice(0,10)}.xlsx`);
+  
+  logActivity("Excel Export", "—", currentUser ? currentUser.username : 'User', `Exported Daily Production & QA Report (${records.length} records)`);
+  toast('Daily Production & QA Report exported to Excel.');
+}
+
+/* ---------------------- MASTER DATABASE TABLE ---------------------- */
+function renderMaster(){
+  const filter = (document.getElementById('master-filter').value||'').toLowerCase();
+  let rows = state.master.map(m=>({m, d:computeDerived(m)}));
+  if(filter){
+    rows = rows.filter(x=>[x.m.trackingNumber,x.m.customer,x.m.site,x.m.grade,x.m.designCode,x.m.bulkNumber,x.m.castedBy].join(' ').toLowerCase().includes(filter));
+  }
+  rows.sort((a,b)=>new Date(b.m.castingDate)-new Date(a.m.castingDate));
+
+  const isAdminUser = isAdmin();
+
+  const table = document.getElementById('master-table');
+  table.querySelector('thead').innerHTML = `<tr>
+    <th>Tracking No.</th><th>Cast Date</th><th>Customer</th><th>Supply Site</th><th>Weather</th><th>Design Code</th><th>Grade</th><th>Slump</th>
+    <th>Cement (kg/m³)</th><th>Volume (m³)</th><th>Silo</th><th>Bulk No.</th><th>Casted By</th><th>Cubes</th>
+    <th>Status</th><th>Tests</th><th>Avg 28d Strength</th><th>Pass/Fail</th>${isAdminUser ? '<th>Actions</th>' : ''}
+  </tr>`;
+  table.querySelector('tbody').innerHTML = rows.length ? rows.map(({m,d})=>`
+    <tr>
+      <td><a href="#" onclick="jumpToRecall('${m.trackingNumber}'); return false;" class="tn-link">${m.trackingNumber}</a></td><td>${fmtDate(m.castingDate)}</td>
+      <td><strong>${m.customer || '—'}</strong></td><td>${m.site}</td><td>${m.weather || '—'}</td>
+      <td>${m.designCode}</td><td>${m.grade}</td><td>${m.slump}</td><td>${m.cementContent}</td>
+      <td>${m.volume != null ? m.volume : '—'}</td>
+      <td>${m.cementSilo}</td><td>${m.bulkNumber}</td><td>${m.castedBy}</td><td>${m.numCubes}</td>
+      <td>${statusBadge(d.status)}</td><td>${d.testsCompleted}/${Math.min(4,m.numCubes)}</td>
+      <td style="font-weight:600;">${d.avgStrength!=null? d.avgStrength.toFixed(2) + ' N/mm²':'—'}</td><td>${statusBadge(d.passFail)}</td>
+      ${isAdminUser ? `<td><button class="btn btn-danger btn-sm" onclick="confirmDeleteRecord('${m.trackingNumber}')" title="Admin only">Delete</button></td>` : ''}
+    </tr>
+  `).join('') : `<tr><td colspan="${isAdminUser ? 19 : 18}"><div class="empty-state"><div class="ic">&#9744;</div>No records found. Create a record using New Cube Entry.</div></td></tr>`;
+}
+
+function confirmDeleteRecord(tn){
+  if(!isAdmin()){
+    toast("Access Denied: Deleting records is restricted to Admin user only.");
+    return;
+  }
+  showModal(
+    "Delete Casting Record",
+    `Are you sure you want to permanently delete tracking record ${tn} and all associated test entries?`,
+    ()=>{
+      state.master = state.master.filter(m=>m.trackingNumber!==tn);
+      state.tests = state.tests.filter(t=>t.trackingNumber!==tn);
+      logActivity("Record Deleted", tn, currentUser ? currentUser.username : 'Admin', `Deleted casting record ${tn} and associated test readings`);
+      saveState();
+      updateSuggestions();
+      renderTestingSidebarList();
+      renderMaster();
+      toast(`Record ${tn} deleted successfully.`);
+    }
+  );
+}
+
+/* ---------------------- ACTIVITY LOG VIEW ---------------------- */
+function renderActivityLog(){
+  const filter = (document.getElementById('activity-filter').value||'').toLowerCase();
+  const typeFilter = document.getElementById('activity-type-filter').value;
+  let rows = state.activities || [];
+
+  if(filter){
+    rows = rows.filter(r=>[r.id, r.trackingNumber, r.user, r.actionType, r.details].join(' ').toLowerCase().includes(filter));
+  }
+  if(typeFilter){
+    rows = rows.filter(r=>r.actionType===typeFilter);
+  }
+
+  const table = document.getElementById('activity-table');
+  table.querySelector('thead').innerHTML = `<tr>
+    <th>Log ID</th><th>Timestamp</th><th>Action Type</th><th>Tracking No.</th><th>User / Operator</th><th>Activity Details</th>
+  </tr>`;
+
+  table.querySelector('tbody').innerHTML = rows.length ? rows.map(r=>`
+    <tr>
+      <td class="mono">${r.id}</td>
+      <td class="mono">${r.formattedTime || fmtDateTime(r.timestamp)}</td>
+      <td>${statusBadge(r.actionType)}</td>
+      <td>${r.trackingNumber && r.trackingNumber !== '—' ? `<a href="#" onclick="jumpToRecall('${r.trackingNumber}'); return false;" class="tn-link">${r.trackingNumber}</a>` : '—'}</td>
+      <td style="font-weight:600;color:var(--slate-deep);">${r.user}</td>
+      <td style="white-space:normal;max-width:400px;line-height:1.4;">${r.details}</td>
+    </tr>
+  `).join('') : `<tr><td colspan="6"><div class="empty-state"><div class="ic">&#128221;</div>No activity logs recorded yet.</div></td></tr>`;
+}
+
+function confirmClearActivityLog(){
+  if(!isAdmin()){
+    toast("Access Denied: Clearing activity logs is restricted to Admin user only.");
+    return;
+  }
+  showModal(
+    "Clear Activity Log",
+    "Are you sure you want to clear all activity recordings? This will remove the audit log history from local storage.",
+    ()=>{
+      state.activities = [];
+      saveState();
+      renderActivityLog();
+      toast("Activity Log cleared.");
+    }
+  );
+}
+
+/* ---------------------- EXPORT & BACKUP ---------------------- */
+function exportExcel(){
+  if(!state.master.length){ toast('No database records to export.'); return; }
+
+  const rows = state.master.map(m=>{
+    const d = computeDerived(m);
+    return {
+      'Tracking Number': m.trackingNumber,
+      'Casting Date': fmtDate(m.castingDate),
+      'Customer': m.customer || '',
+      'Supply Site': m.site,
+      'Weather': m.weather || '',
+      'Design Code': m.designCode,
+      'Grade': m.grade,
+      'Slump': m.slump,
+      'Cement Content (kg/m3)': m.cementContent,
+      'Volume (m3)': m.volume != null ? m.volume : '',
+      'Cement Silo': m.cementSilo,
+      'Bulk Number': m.bulkNumber,
+      'Casted By': m.castedBy,
+      'Number of Cubes': m.numCubes,
+      'Cast Time': m.castTime || '',
+      'Remarks': m.remarks || '',
+      'Status': d.status,
+      'Tests Completed': d.testsCompleted,
+      'Average 28d Strength (N/mm2)': d.avgStrength!=null ? d.avgStrength.toFixed(2) : '',
+      'Pass/Fail': d.passFail,
+      'Date Created': fmtDate(m.dateCreated),
+      'Last Updated': fmtDate(m.lastUpdated),
+    };
+  });
+
+  const testRows = state.tests.map(t=>({
+    'Test ID': t.testId,
+    'Tracking Number': t.trackingNumber,
+    'Testing Date': fmtDate(t.testingDate),
+    'Testing Age': t.testingAge,
+    'Tested By': t.testedBy,
+    'Weight (kg)': t.weight || 8.25,
+    'Load (kN)': t.load,
+    'Cube Size (mm)': t.cubeSize,
+    'Strength (N/mm2)': t.strength,
+    'Design Code': t.designCode,
+    'Grade': t.grade
+  }));
+
+  const logRows = (state.activities || []).map(a=>({
+    'Log ID': a.id,
+    'Timestamp': a.formattedTime || fmtDateTime(a.timestamp),
+    'Action Type': a.actionType,
+    'Tracking Number': a.trackingNumber,
+    'User / Operator': a.user,
+    'Details': a.details
+  }));
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Master Database');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(testRows), 'Testing Records');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(logRows), 'Activity Log');
+  XLSX.writeFile(wb, `Tokyo_Supermix_QC_Export_${new Date().toISOString().slice(0,10)}.xlsx`);
+
+  logActivity("Excel Export", "—", currentUser ? currentUser.username : 'User', `Exported Excel workbook with Master Database, Testing Records, and Activity Log sheets`);
+  toast('Excel workbook exported with Activity Log sheet.');
+}
+
+function exportJSON(){
+  if(!isAdmin()){ toast('Access Denied: Only Admins can download JSON backups.'); return; }
+  const blob = new Blob([JSON.stringify(state,null,2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `tokyo_supermix_qc_backup_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+
+  logActivity("Backup Download", "—", currentUser ? currentUser.username : 'Admin', `Downloaded full JSON database backup`);
+  toast('JSON database backup downloaded.');
+}
+
+function importJSON(evt){
+  if(!isAdmin()){ toast('Access Denied: Only Admins can restore JSON backups.'); return; }
+  const file = evt.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e=>{
+    try{
+      const data = JSON.parse(e.target.result);
+      if(!data.master || !data.tests) throw new Error('Invalid schema');
+      state = data;
+      if(!state.activities) state.activities = [];
+      if(!state.users) state.users = [];
+      let maxSeq = 0;
+      state.master.forEach(m=>{
+        const n = parseInt(m.trackingNumber.split('-')[1],10);
+        if(!isNaN(n) && n>maxSeq) maxSeq=n;
+      });
+      nextTrackingSeq = maxSeq+1;
+
+      logActivity("Backup Restore", "—", currentUser ? currentUser.username : 'Admin', `Restored database backup (${state.master.length} castings, ${state.tests.length} tests)`);
+
+      saveState();
+      updateSuggestions();
+      renderTestingSidebarList();
+      renderMaster();
+      renderDashboard();
+      toast('Database backup restored successfully.');
+    }catch(err){
+      toast('Failed to restore backup — invalid JSON file format.');
+    }
+  };
+  reader.readAsText(file);
+  evt.target.value = '';
+}
+
+function confirmResetData(){
+  if(!isAdmin()){
+    toast("Access Denied: Resetting database is restricted to Admin user only.");
+    return;
+  }
+  showModal(
+    "Reset All Data",
+    "Are you sure you want to delete all castings, test records, and activity logs from local storage? This action cannot be undone unless you have a JSON backup.",
+    ()=>{
+      const savedUsers = state.users;
+      state = { master: [], tests: [], activities: [], users: savedUsers, currentUser: currentUser ? currentUser.username : null };
+      nextTrackingSeq = 1;
+      logActivity("Data Reset", "—", currentUser ? currentUser.username : 'Admin', "Reset all database records and activity logs");
+      saveState();
+      updateSuggestions();
+      renderTestingSidebarList();
+      renderMaster();
+      renderDashboard();
+      toast("Data reset to empty state.");
+    }
+  );
+}
+
+/* ---------------------- MODAL DIALOG ---------------------- */
+let modalCallback = null;
+function showModal(title, body, onConfirm){
+  document.getElementById('modal-title').textContent = title;
+  document.getElementById('modal-body').textContent = body;
+  modalCallback = onConfirm;
+  document.getElementById('modal-backdrop').classList.add('show');
+}
+function closeModal(){
+  document.getElementById('modal-backdrop').classList.remove('show');
+  modalCallback = null;
+}
+document.getElementById('modal-confirm-btn').addEventListener('click', ()=>{
+  if(modalCallback) modalCallback();
+  closeModal();
+});
+
+/* ---------------------- TEST SKIP WORKFLOW & WARNING ALERTS ---------------------- */
+let pendingSkipItem = null;
+
+function promptSkipTest(tn, age){
+  const m = findMaster(tn);
+  if(!m){ toast('Tracking Number not found.'); return; }
+
+  pendingSkipItem = { trackingNumber: tn, age, master: m };
+
+  const is28d = (age === '28 Days');
+  const modal = document.getElementById('skip-modal-backdrop');
+  const title = document.getElementById('skip-modal-title');
+  const body = document.getElementById('skip-modal-body');
+  const warnBox = document.getElementById('skip-warning-box');
+  const confirmBtn = document.getElementById('skip-confirm-btn');
+
+  if(title) title.textContent = is28d ? "⚠️ CRITICAL WARNING: Skip 28-Day Test" : `Skip ${age} Test — ${tn}`;
+  if(body) body.textContent = `You are skipping the ${age} test for ${tn} (${m.site}, Grade ${m.grade}). Please provide an engineering justification.`;
+  
+  if(warnBox){
+    warnBox.style.display = is28d ? 'block' : 'none';
+  }
+
+  if(confirmBtn){
+    confirmBtn.className = is28d ? "btn btn-danger" : "btn btn-primary";
+    confirmBtn.textContent = is28d ? "Proceed & Record Deviation" : "Confirm Skip";
+  }
+
+  document.getElementById('skip-reason-select').value = "Target strength already achieved via early test";
+  document.getElementById('skip-custom-reason-input').value = "";
+  document.getElementById('skip-custom-reason-field').style.display = "none";
+
+  modal.classList.add('show');
+}
+
+function toggleCustomReasonField(){
+  const sel = document.getElementById('skip-reason-select').value;
+  const field = document.getElementById('skip-custom-reason-field');
+  if(field) field.style.display = (sel === 'Other') ? 'block' : 'none';
+}
+
+function closeSkipModal(){
+  const modal = document.getElementById('skip-modal-backdrop');
+  if(modal) modal.classList.remove('show');
+  pendingSkipItem = null;
+}
+
+function executeSkipTest(){
+  if(!pendingSkipItem) return;
+  const { trackingNumber, age, master } = pendingSkipItem;
+
+  const selReason = document.getElementById('skip-reason-select').value;
+  const customReason = document.getElementById('skip-custom-reason-input').value.trim();
+  const finalReason = (selReason === 'Other') ? (customReason || 'Other reason unspecified') : selReason;
+
+  const is28d = (age === '28 Days');
+  const severity = is28d ? 'HIGH' : 'MODERATE';
+
+  if(!state.skippedTests) state.skippedTests = [];
+
+  const skipEntry = {
+    id: 'SKP-' + String(state.skippedTests.length + 1).padStart(5, '0'),
+    timestamp: new Date().toISOString(),
+    formattedTime: fmtDateTime(new Date()),
+    trackingNumber,
+    customer: master.customer || '—',
+    site: master.site || '—',
+    skippedAge: age,
+    skippedBy: currentUser ? currentUser.username : 'Operator',
+    reason: finalReason,
+    severity
+  };
+
+  state.skippedTests.unshift(skipEntry);
+
+  logActivity(
+    "Test Skipped",
+    trackingNumber,
+    currentUser ? currentUser.username : 'Operator',
+    `Skipped ${age} test for ${trackingNumber} (${severity} Severity). Reason: ${finalReason}`
+  );
+
+  saveState();
+  closeSkipModal();
+
+  renderTestingSidebarList();
+  if(document.getElementById('view-schedule') && document.getElementById('view-schedule').classList.contains('active')) renderSchedule();
+  if(document.getElementById('view-warnings') && document.getElementById('view-warnings').classList.contains('active')) renderWarnings();
+  applyRoleRestrictions();
+
+  toast(`Skipped ${age} test for ${trackingNumber}. Recorded in Warning Alerts.`);
+}
+
+function renderWarnings(){
+  const filter = (document.getElementById('warnings-filter') ? document.getElementById('warnings-filter').value : '').toLowerCase();
+  const sevFilter = document.getElementById('warnings-severity-filter') ? document.getElementById('warnings-severity-filter').value : '';
+
+  let rows = state.skippedTests || [];
+
+  if(filter){
+    rows = rows.filter(r => [r.id, r.trackingNumber, r.customer, r.site, r.skippedBy, r.reason, r.skippedAge].join(' ').toLowerCase().includes(filter));
+  }
+  if(sevFilter){
+    rows = rows.filter(r => r.severity === sevFilter);
+  }
+
+  const tbody = document.querySelector('#warnings-table tbody');
+  if(!tbody) return;
+
+  if(!rows.length){
+    tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><div class="ic">&#10003;</div>No skipped tests or compliance warnings recorded.</div></td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = rows.map(r => {
+    const riskBadge = r.severity === 'HIGH' 
+      ? '<span class="badge badge-red">⚠️ HIGH RISK (28d)</span>' 
+      : '<span class="badge badge-amber">MODERATE</span>';
+
+    return `
+      <tr>
+        <td class="mono">${r.id}</td>
+        <td class="mono">${r.formattedTime || fmtDateTime(r.timestamp)}</td>
+        <td><a href="#" onclick="jumpToRecall('${r.trackingNumber}'); return false;" class="tn-link">${r.trackingNumber}</a></td>
+        <td><strong>${escapeHtml(r.customer)}</strong> (${escapeHtml(r.site)})</td>
+        <td><span class="badge badge-blue">${r.skippedAge}</span></td>
+        <td>${riskBadge}</td>
+        <td style="font-weight:600;color:var(--slate-deep);">${escapeHtml(r.skippedBy)}</td>
+        <td style="white-space:normal;max-width:320px;line-height:1.4;">${escapeHtml(r.reason)}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function confirmClearWarnings(){
+  if(!isAdmin()){
+    toast("Access Denied: Clearing warning logs is restricted to Admin user only.");
+    return;
+  }
+  showModal(
+    "Clear Warning Alerts Log",
+    "Are you sure you want to clear all skipped test warning alerts? This will clear the compliance log from local storage.",
+    ()=>{
+      state.skippedTests = [];
+      saveState();
+      renderWarnings();
+      applyRoleRestrictions();
+      toast("Warning Alerts log cleared.");
+    }
+  );
+}
+
+/* ---------------------- INIT ---------------------- */
+document.getElementById('f-castingDate').valueAsDate = new Date();
+</script>
+</body>
+</html>
