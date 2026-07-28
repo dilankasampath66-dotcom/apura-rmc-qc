@@ -2089,6 +2089,46 @@ function detectAge(castingDate, testingDate){
   });
   return bestDiff <= 2 ? best.label : 'Other';
 }
+/**
+ * Evaluates the testing cycle status of a concrete casting record based on engineering maturity hierarchy.
+ */
+function evaluateTestingStatus(record) {
+  if (!record || typeof record !== 'object') {
+    return { overallStatus: 'Pending', skipEarlyTests: false, is28DayPending: true };
+  }
+
+  const parseStrength = (val) => {
+    if (val === null || val === undefined || val === '') return null;
+    const num = Number(val);
+    return !isNaN(num) && num > 0 ? num : null;
+  };
+
+  const extractTargetGrade = (gradeStr) => {
+    if (typeof gradeStr === 'number') return gradeStr > 0 ? gradeStr : 0;
+    if (!gradeStr || typeof gradeStr !== 'string') return 0;
+    const match = gradeStr.match(/\d+/);
+    return match ? parseFloat(match[0]) : 0;
+  };
+
+  const s3 = parseStrength(record.strength3D);
+  const s7 = parseStrength(record.strength7D);
+  const s14 = parseStrength(record.strength14D);
+  const s28 = parseStrength(record.strength28D);
+  const targetGrade = extractTargetGrade(record.grade);
+
+  if (s28 !== null) {
+    return { overallStatus: 'Completed', skipEarlyTests: true, is28DayPending: false };
+  }
+
+  const earlyStrengths = [s3, s7, s14].filter(val => val !== null);
+  const hasAchievedEarly = targetGrade > 0 && earlyStrengths.some(val => val >= targetGrade);
+
+  if (hasAchievedEarly) {
+    return { overallStatus: 'Target Achieved - Awaiting 28D', skipEarlyTests: true, is28DayPending: true };
+  }
+
+  return { overallStatus: 'Pending', skipEarlyTests: false, is28DayPending: true };
+}
 
 function buildSchedule(){
   const rows = [];
@@ -2661,9 +2701,20 @@ function updateAgeReminderBanner(m){
   const activeAges = m.activeAges || ['3 Days', '7 Days', '14 Days', '28 Days'];
   const allAges = ['3 Days', '7 Days', '14 Days', '28 Days'];
 
+  const getS = (age) => existingTests.filter(t => t.testingAge === age).map(t => Number(t.strength)).find(s => s > 0) || null;
+  const evalResult = typeof evaluateTestingStatus === 'function' ? evaluateTestingStatus({
+    grade: m.grade,
+    strength3D: getS('3 Days'),
+    strength7D: getS('7 Days'),
+    strength14D: getS('14 Days'),
+    strength28D: getS('28 Days')
+  }) : { skipEarlyTests: false };
+
   container.innerHTML = allAges.map(age => {
     const isCompleted = existingTests.some(t => t.testingAge === age);
-    const isSkipped = existingSkips.some(s => s.skippedAge === age);
+    const isSkippedManual = existingSkips.some(s => s.skippedAge === age);
+    const isSkippedLogic = evalResult.skipEarlyTests && age !== '28 Days' && !isCompleted;
+    const isSkipped = isSkippedManual || isSkippedLogic;
     const isActive = activeAges.includes(age);
 
     if(isCompleted){
