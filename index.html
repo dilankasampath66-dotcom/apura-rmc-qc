@@ -4303,16 +4303,22 @@ function renderChartSlump(filteredMaster, filteredTests) {
 function renderChartDensity(filteredMaster, filteredTests) {
   const canvasId = 'chart-density';
   try {
-    const CUBE_VOLUME_M3 = 0.003375; // Standard 150mm cube volume
-
     const validTests = [];
     (filteredTests || []).forEach(t => {
       if (!t) return;
-      const wt = parseFloat(t.weight);
+      let wt = parseFloat(t.weight);
       if (isNaN(wt) || wt <= 0) return;
       
-      const density = parseFloat((wt / CUBE_VOLUME_M3).toFixed(1));
-      if (isNaN(density) || density < 1500 || density > 3000) return; // Safeguard outliers
+      // Auto-correct if user entered grams (e.g. 8250) instead of kg (8.25)
+      if (wt > 100) wt = wt / 1000;
+      
+      // Dynamic volume calculation based on actual cube size
+      const sizeMm = parseFloat(t.cubeSize) || 150;
+      const volumeM3 = Math.pow(sizeMm / 1000, 3);
+      
+      const density = parseFloat((wt / volumeM3).toFixed(1));
+      // Relaxed safeguards for lightweight or heavy concrete
+      if (isNaN(density) || density < 1000 || density > 4000) return; 
 
       const dateStr = t.testingDate || '';
       validTests.push({
@@ -4382,7 +4388,7 @@ function renderChartDensity(filteredMaster, filteredTests) {
         },
         scales: {
           x: { title: { display: true, text: 'Chronological Test Order', font: { size: 11, weight: 'bold' } } },
-          y: { title: { display: true, text: 'Density (kg/m³)', font: { size: 11, weight: 'bold' } }, min: 2100, max: 2600 }
+          y: { title: { display: true, text: 'Density (kg/m³)', font: { size: 11, weight: 'bold' } } }
         }
       }
     });
