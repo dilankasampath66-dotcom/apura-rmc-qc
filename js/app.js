@@ -1,12 +1,18 @@
 // js/app.js
 /* =========================================================================
    TOKYO SUPERMIX / APURA RMC PLANT — SALES & QC MANAGEMENT SYSTEM
-   Core Application Controller, Form Handlers, & Master DB Import/Export Logic
+   Main Application Controller & Event Initialization Engine
    ========================================================================= */
 
 import { dbManager } from "./db.js";
+import { calculateConcreteQuotation } from "./pricingEngine.js";
+import { validateStageTransition, computeTestingSchedule } from "./rulesEngine.js";
+import { generateAIExecutiveInsights } from "./aiEngine.js";
+import { validateEntryIntegrity } from "./selfImprovement.js";
+import { runQAAutoTests } from "./autoQA.js";
+import { exportFullExcelReport } from "./excelExport.js";
 
-// Global System Application State reference
+// Global Application State initialization
 window.state = window.state || {
   master: [],
   tests: [],
@@ -22,31 +28,47 @@ window.currentUser = null;
 window.nextTrackingSeq = 1;
 
 /**
- * Initializes application event listeners and loads persistent state on DOM ready.
+ * Initializes application event listeners, loads database state, and binds handlers on DOM load.
  */
 document.addEventListener('DOMContentLoaded', async () => {
-  console.log("🚀 Initializing Tokyo Supermix RMC Application Logic...");
-  
-  // Attach event listeners for restore file inputs and import buttons
-  setupImportExportListeners();
+  console.log("🚀 Initializing Tokyo Supermix RMC Master Application...");
 
-  // Attach form submit interceptors with event.preventDefault()
-  setupFormSubmitInterceptors();
+  // Intercept all form submit events to prevent page reloads
+  setupFormInterceptors();
+
+  // Attach Database Restore (JSON) and Export event listeners
+  setupDatabaseIO();
 
   // Load state from Cloud Firestore or LocalStorage
   await dbManager.loadState();
+
+  // Run initial AI insights computation and QA test suite check
+  if (typeof window.generateAIExecutiveInsights === 'function') {
+    window.generateAIExecutiveInsights(window.state);
+  }
 });
 
 /**
- * Attaches event listeners to database JSON import & export buttons/inputs.
+ * Intercepts form submissions across the application to prevent page reloads.
  */
-function setupImportExportListeners() {
-  const restoreFileInputs = [
+function setupFormInterceptors() {
+  document.querySelectorAll('form').forEach(form => {
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+    });
+  });
+}
+
+/**
+ * Attaches event listeners for JSON backup file restore and export buttons.
+ */
+function setupDatabaseIO() {
+  const fileInputs = [
     document.getElementById('restore-file'),
     document.getElementById('input-import-db')
   ];
 
-  restoreFileInputs.forEach(input => {
+  fileInputs.forEach(input => {
     if (input) {
       input.addEventListener('change', async (evt) => {
         const file = evt.target.files?.[0];
@@ -55,24 +77,24 @@ function setupImportExportListeners() {
             await dbManager.importMasterDB(file);
             evt.target.value = '';
           } catch (err) {
-            console.error("Import listener error:", err);
+            console.error("⚠️ Database import error:", err);
           }
         }
       });
     }
   });
 
-  const importTriggerBtns = [
+  const importBtns = [
     document.getElementById('btn-restore-json'),
     document.getElementById('btn-trigger-import-db')
   ];
 
-  importTriggerBtns.forEach(btn => {
+  importBtns.forEach(btn => {
     if (btn) {
       btn.addEventListener('click', (e) => {
         e.preventDefault();
-        const fileInput = document.getElementById('restore-file') || document.getElementById('input-import-db');
-        if (fileInput) fileInput.click();
+        const input = document.getElementById('restore-file') || document.getElementById('input-import-db');
+        if (input) input.click();
       });
     }
   });
@@ -87,20 +109,7 @@ function setupImportExportListeners() {
 }
 
 /**
- * Intercepts form submissions across the application to prevent page reloads
- * before data is saved asynchronously to Cloud Firestore and LocalStorage.
- */
-function setupFormSubmitInterceptors() {
-  const forms = document.querySelectorAll('form');
-  forms.forEach(form => {
-    form.addEventListener('submit', (e) => {
-      e.preventDefault();
-    });
-  });
-}
-
-/**
- * Global wrapper for importJSON called directly from inline HTML onchange
+ * Global export wrappers for HTML event attributes
  */
 export async function importJSON(evt) {
   if (evt && typeof evt.preventDefault === 'function') evt.preventDefault();
@@ -111,12 +120,14 @@ export async function importJSON(evt) {
   }
 }
 
-/**
- * Global wrapper for exportJSON called directly from inline HTML onclick
- */
 export function exportJSON(evt) {
   if (evt && typeof evt.preventDefault === 'function') evt.preventDefault();
   dbManager.exportMasterDB();
+}
+
+export function exportExcel(evt) {
+  if (evt && typeof evt.preventDefault === 'function') evt.preventDefault();
+  exportFullExcelReport(window.state);
 }
 
 /**
@@ -129,26 +140,26 @@ export async function saveCubeEntry(e) {
     return;
   }
 
+  const castingDate = document.getElementById('f-castingDate')?.value;
   const customer = (document.getElementById('f-customer')?.value || '').trim();
   const site = (document.getElementById('f-site')?.value || '').trim();
   const designCode = (document.getElementById('f-designCode')?.value || '').trim();
-  const bulk = (document.getElementById('f-bulk')?.value || '').trim();
-  const castingDate = document.getElementById('f-castingDate')?.value;
+  const bulkNumber = (document.getElementById('f-bulk')?.value || '').trim();
   const grade = document.getElementById('f-grade')?.value;
   const slump = document.getElementById('f-slump')?.value;
-  const silo = document.getElementById('f-silo')?.value;
+  const cementSilo = document.getElementById('f-silo')?.value;
   const weather = document.getElementById('f-weather')?.value;
   const castedBy = (document.getElementById('f-castedBy')?.value || '').trim() || window.currentUser.username;
-  const cement = parseFloat(document.getElementById('f-cement')?.value);
+  const cementContent = parseFloat(document.getElementById('f-cement')?.value);
   const volume = parseFloat(document.getElementById('f-volume')?.value);
   const numCubes = parseInt(document.getElementById('f-numCubes')?.value, 10);
 
-  if (!castingDate || !customer || !site || !designCode || !bulk || !grade || !slump || !silo) {
-    window.toast?.('Please complete all required fields.');
-    return;
-  }
-  if (isNaN(cement) || cement < 0 || isNaN(volume) || volume < 0 || isNaN(numCubes) || numCubes < 1) {
-    window.toast?.('Please check numeric field inputs.');
+  const errors = validateEntryIntegrity({
+    castingDate, customer, site, designCode, bulkNumber, volume, cementContent
+  });
+
+  if (errors.length) {
+    window.toast?.(errors[0]);
     return;
   }
 
@@ -173,10 +184,10 @@ export async function saveCubeEntry(e) {
     designCode,
     grade,
     slump,
-    cementContent: cement,
+    cementContent,
     volume,
-    cementSilo: silo,
-    bulkNumber: bulk,
+    cementSilo,
+    bulkNumber,
     castedBy,
     numCubes,
     activeAges,
@@ -198,7 +209,7 @@ export async function saveCubeEntry(e) {
 }
 
 /**
- * Handles Cube Test Result submission with e.preventDefault()
+ * Handles Cube Testing Result Submission
  */
 export async function saveTestResult(e) {
   if (e && typeof e.preventDefault === 'function') e.preventDefault();
@@ -250,6 +261,7 @@ export async function saveTestResult(e) {
 // Expose app functions onto window object
 window.importJSON = importJSON;
 window.exportJSON = exportJSON;
+window.exportExcel = exportExcel;
 window.saveCubeEntry = saveCubeEntry;
 window.saveTestResult = saveTestResult;
 window.saveState = (st) => dbManager.saveState(st);

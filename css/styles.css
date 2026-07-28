@@ -1,0 +1,152 @@
+/* css/styles.css */
+/* =========================================================================
+   TOKYO SUPERMIX / APURA RMC PLANT — SALES & QC MANAGEMENT SYSTEM
+   Master Design System, Glassmorphism, Kanban Boards, & Responsive Layout
+   ========================================================================= */
+
+:root {
+  --bg:            #F3F5F4;
+  --surface:       #FFFFFF;
+  --surface-sunk:  #EAEEED;
+  --line:          #D8DFDD;
+  --line-dark:     #BCC7C4;
+  --ink:           #1E2A28;
+  --ink-soft:      #485854;
+  --slate:         #3C5A63;
+  --slate-deep:    #1F333A;
+  --amber:         #C7801A;
+  --amber-bg:      #FBF0DD;
+  --green:         #2E7D5B;
+  --green-bg:      #E4F3EA;
+  --red:           #B8493D;
+  --red-bg:        #FBE9E6;
+  --blue:          #3D6FA6;
+  --blue-bg:       #E6EEF7;
+  --purple:        #7C5CA6;
+  --purple-bg:     #F3EEF9;
+
+  --radius: 12px;
+  --radius-sm: 8px;
+  --shadow: 0 2px 4px rgba(30,42,40,0.04), 0 6px 20px rgba(30,42,40,0.07);
+
+  --font-display: 'Archivo Expanded', sans-serif;
+  --font-body: 'Inter', sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 14.5px;
+  line-height: 1.5;
+  -webkit-tap-highlight-color: transparent;
+}
+h1, h2, h3, h4 { font-family: var(--font-display); letter-spacing: 0.01em; margin: 0; color: var(--slate-deep); }
+button { font-family: var(--font-body); cursor: pointer; touch-action: manipulation; }
+input, select, textarea { font-family: var(--font-body); }
+a { color: var(--slate); text-decoration: none; }
+
+/* ---- GLASS CARDS ---- */
+.glass-card {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(216, 223, 221, 0.8);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 22px 24px;
+}
+
+/* ---- KANBAN BOARD FOR SALES CRM PIPELINE ---- */
+.kanban-board {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 16px;
+  margin-top: 18px;
+  overflow-x: auto;
+  padding-bottom: 12px;
+  -webkit-overflow-scrolling: touch;
+}
+@media (max-width: 1024px) {
+  .kanban-board { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 640px) {
+  .kanban-board { grid-template-columns: 1fr; }
+}
+
+.kanban-col {
+  background: var(--surface-sunk);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px;
+  min-height: 450px;
+  display: flex;
+  flex-direction: column;
+}
+.kanban-header {
+  font-family: var(--font-display);
+  font-size: 12.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--slate-deep);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.kanban-card {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  margin-bottom: 10px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+  transition: transform .12s ease, box-shadow .12s ease;
+}
+.kanban-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(31,51,58,0.1);
+}
+
+/* ---- FORMS & TOUCH INPUTS ---- */
+label { display: block; font-size: 13px; font-weight: 700; color: var(--slate-deep); margin-bottom: 6px; }
+.field { margin-bottom: 16px; }
+input[type=text], input[type=number], input[type=date], input[type=time], input[type=password], select, textarea {
+  width: 100%; padding: 12px 14px; min-height: 48px;
+  border: 1px solid var(--line); border-radius: var(--radius-sm);
+  background: #fff; color: var(--ink); font-size: 16px; /* 16px prevents iOS zoom */
+  transition: border-color .12s ease, box-shadow .12s ease;
+}
+input:focus, select:focus, textarea:focus {
+  outline: none; border-color: var(--slate); box-shadow: 0 0 0 3px rgba(60,90,99,0.18);
+}
+textarea { resize: vertical; min-height: 80px; }
+
+/* ---- TOUCH BUTTONS ---- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 12px 20px; min-height: 48px; border-radius: var(--radius-sm);
+  border: 1px solid transparent; font-size: 14.5px; font-weight: 700;
+  transition: all .12s ease; user-select: none; touch-action: manipulation;
+}
+.btn-primary { background: var(--slate); color: #fff; }
+.btn-primary:hover { background: var(--slate-deep); box-shadow: 0 4px 12px rgba(31,51,58,0.3); }
+.btn-ghost { background: transparent; border-color: var(--line-dark); color: var(--ink); }
+.btn-ghost:hover { background: var(--surface-sunk); border-color: var(--slate); }
+.btn-danger { background: var(--red-bg); color: var(--red); border-color: rgba(184,73,61,0.25); }
+.btn-danger:hover { background: #F5D9D5; }
+.btn-sm { padding: 8px 14px; min-height: 38px; font-size: 13px; }
+
+/* ---- TABLES ---- */
+.table-wrap {
+  overflow-x: auto; overflow-y: auto; max-height: 60vh;
+  border: 1px solid var(--line); border-radius: var(--radius);
+  background: #fff; -webkit-overflow-scrolling: touch;
+}
+table { width: 100%; border-collapse: collapse; font-size: 13.5px; background: #fff; }
+th, td { padding: 12px 14px; text-align: left; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { background: var(--surface-sunk); color: var(--slate-deep); font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; position: sticky; top: 0; z-index: 10; }
