@@ -611,8 +611,8 @@ td.mono{ font-family: var(--font-mono); font-size:13px; }
 }
 
 @media print{
-  .sidebar, .mobile-topbar, .no-print, .kpi-strip, .search-row, .page-head p, .live-user-bar{ display:none !important; }
-  body{ background:#fff; color:#000; margin: 0; padding: 0; }
+  .sidebar, .mobile-topbar, .no-print, .kpi-strip, .search-row, .page-head, .live-user-bar, body::before { display:none !important; }
+  body{ background:#fff !important; background-image:none !important; color:#000 !important; margin: 0; padding: 0; }
   .main{ padding:0; max-width:none; }
   .report-sheet{ border:none; box-shadow:none; padding:0; min-height:0; position:relative; }
   .badge{ border:1px solid #ccc; background:none !important; color:#000 !important; }
@@ -3695,7 +3695,7 @@ function generateCubeReport(){
     <div class="report-sheet official-report-sheet" style="font-family:var(--font-body);color:#000;">
       
       <!-- HEADER SECTION -->
-      <div style="text-align:center;border-bottom:2px solid var(--slate-deep);padding-bottom:12px;margin-bottom:14px;">
+      <div contenteditable="true" style="text-align:center;border-bottom:2px solid var(--slate-deep);padding-bottom:12px;margin-bottom:14px; outline:none;" title="Click to edit header details before printing">
         <div style="font-family:var(--font-display);font-weight:800;font-size:20px;color:var(--slate-deep);letter-spacing:0.03em;">TOKYO SUPER MIX (PVT) LTD</div>
         <div style="font-weight:700;font-size:13.5px;color:var(--ink);margin-top:2px;">TOKYO SUPER MIX READY MIXED CONCRETE PLANT</div>
         <div style="font-size:12px;color:var(--ink-soft);">Saliya Mawatha Anuradhapura</div>
