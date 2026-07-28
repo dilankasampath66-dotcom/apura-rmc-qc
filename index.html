@@ -9,7 +9,7 @@
 
 <!-- CDN Libraries: Chart.js for charts, SheetJS for Excel export, html2pdf for PDF export -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js" onload="if(document.getElementById('view-dashboard') && document.getElementById('view-dashboard').classList.contains('active')) renderDashboard();"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/SheetJS/0.19.3/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" onerror="var s=document.createElement('script');s.src='https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';document.head.appendChild(s);console.warn('Primary SheetJS CDN failed, loading fallback.');"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
 <!-- Firebase v9 Compat CDN SDKs -->
@@ -3311,6 +3311,10 @@ function renderDailyReport(){
 }
 
 function exportDailyExcel(){
+  if(typeof XLSX === 'undefined'){
+    toast('⚠️ Excel library (SheetJS) is not loaded. Please check your internet connection and refresh the page.');
+    return;
+  }
   const startVal = document.getElementById('daily-start').value;
   const endVal = document.getElementById('daily-end').value;
   
@@ -3455,6 +3459,10 @@ function confirmClearActivityLog(){
 
 /* ---------------------- EXPORT & BACKUP ---------------------- */
 function exportExcel(){
+  if(typeof XLSX === 'undefined'){
+    toast('⚠️ Excel library (SheetJS) is not loaded. Please check your internet connection and refresh the page.');
+    return;
+  }
   if(!state.master.length){ toast('No database records to export.'); return; }
 
   const rows = state.master.map(m=>{
