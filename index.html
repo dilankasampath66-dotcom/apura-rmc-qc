@@ -8,7 +8,7 @@
 <title>Apura RMC Plant — Cube QC System</title>
 
 <!-- CDN Libraries: Chart.js for charts, SheetJS for Excel export, html2pdf for PDF export -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js" onload="if(document.getElementById('view-dashboard') && document.getElementById('view-dashboard').classList.contains('active')) renderDashboard();"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js" onload="if(document.getElementById('view-dashboard') && document.getElementById('view-dashboard').classList.contains('active')) renderDashboard();"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" onerror="var s=document.createElement('script');s.src='https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';document.head.appendChild(s);console.warn('Primary SheetJS CDN failed, loading fallback.');"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
@@ -4144,7 +4144,7 @@ function renderChartCorrelation(filteredMaster, filteredTests) {
     });
   } catch (err) {
     console.error("Error rendering Chart 1 (Correlation):", err);
-    showChartPlaceholder(canvasId, "Unable to render 7d vs 28d Correlation Chart.");
+    showChartPlaceholder(canvasId, "Unable to render 7d vs 28d Correlation Chart: " + err.message);
   }
 }
 
@@ -4212,7 +4212,7 @@ function renderChartWeather(filteredMaster, filteredTests) {
     });
   } catch (err) {
     console.error("Error rendering Chart 2 (Weather Impact):", err);
-    showChartPlaceholder(canvasId, "Unable to render Weather Impact Chart.");
+    showChartPlaceholder(canvasId, "Unable to render Weather Impact Chart: " + err.message);
   }
 }
 
@@ -4292,7 +4292,7 @@ function renderChartSlump(filteredMaster, filteredTests) {
     });
   } catch (err) {
     console.error("Error rendering Chart 3 (Slump Efficiency):", err);
-    showChartPlaceholder(canvasId, "Unable to render Slump & Efficiency Chart.");
+    showChartPlaceholder(canvasId, "Unable to render Slump & Efficiency Chart: " + err.message);
   }
 }
 
@@ -4388,7 +4388,7 @@ function renderChartDensity(filteredMaster, filteredTests) {
     });
   } catch (err) {
     console.error("Error rendering Chart 4 (Density):", err);
-    showChartPlaceholder(canvasId, "Unable to render Compaction Density Chart.");
+    showChartPlaceholder(canvasId, "Unable to render Compaction Density Chart: " + err.message);
   }
 }
 
@@ -4486,7 +4486,7 @@ function renderChartTargetControl(filteredMaster, filteredTests) {
     });
   } catch (err) {
     console.error("Error rendering Chart 5 (Target Control):", err);
-    showChartPlaceholder(canvasId, "Unable to render Target Control Chart.");
+    showChartPlaceholder(canvasId, "Unable to render Target Control Chart: " + err.message);
   }
 }
 
