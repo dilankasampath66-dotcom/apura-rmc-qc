@@ -1219,7 +1219,7 @@ td.mono{ font-family: var(--font-mono); font-size:13px; }
 <!-- FIREBASE SDK INITIALIZATION (CLOUD FIRESTORE INTEGRATION) -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-  import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+  import { initializeFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
   // Production Firebase Project Configuration for APURA RMC PLANT
   const firebaseConfig = {
@@ -1237,9 +1237,12 @@ td.mono{ font-family: var(--font-mono); font-size:13px; }
   try {
     if (firebaseConfig.apiKey) {
       const app = initializeApp(firebaseConfig);
-      db = getFirestore(app);
+      // Enable Long Polling to prevent WebChannel RPC Write stream transport errors
+      db = initializeFirestore(app, {
+        experimentalForceLongPolling: true
+      });
       firebaseActive = true;
-      console.log("🔥 Firebase Cloud Firestore connected to apura-rmc-qc.");
+      console.log("🔥 Firebase Cloud Firestore connected with Long Polling active (apura-rmc-qc).");
     }
   } catch (err) {
     console.warn("⚠️ Firebase init failed, fallback to localStorage active:", err);

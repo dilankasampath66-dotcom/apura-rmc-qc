@@ -34,8 +34,13 @@ export class DatabaseManager {
           firebase.initializeApp(firebaseConfig);
         }
         this.db = firebase.firestore();
+        // Enable Long Polling to prevent WebChannel RPC Write stream transport errors
+        this.db.settings({
+          experimentalForceLongPolling: true,
+          merge: true
+        });
         this.firebaseActive = true;
-        console.log("🔥 Firebase Firestore DatabaseManager connected via Compat CDN API.");
+        console.log("🔥 Firebase Firestore DatabaseManager connected via Compat CDN API (Long Polling Active).");
       } else {
         console.warn("⚠️ Firebase Compat SDK not available globally on window.");
       }
