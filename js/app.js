@@ -376,12 +376,104 @@ export function logActivity(actionType, trackingNumber, user, details) {
   window.state.activities.unshift(act);
 }
 
+/**
+ * Asynchronously restores master JSON database backup and syncs all collections to Cloud Firestore.
+ */
+export async function importJSON(evt) {
+  if (window.isAdmin && !window.isAdmin()) { 
+    window.toast?.('Access Denied: Only Admins can restore JSON backups.'); 
+    return; 
+  }
+  const file = evt.target?.files?.[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!data.master && !data.tests && !data.crmVisits) throw new Error('Invalid JSON backup schema');
+
+      window.state = {
+        master: Array.isArray(data.master) ? data.master : [],
+        tests: Array.isArray(data.tests) ? data.tests : [],
+        activities: Array.isArray(data.activities) ? data.activities : [],
+        users: Array.isArray(data.users) ? data.users : (window.state.users || []),
+        skippedTests: Array.isArray(data.skippedTests) ? data.skippedTests : [],
+        crmVisits: Array.isArray(data.crmVisits) ? data.crmVisits : [],
+        mixGrades: Array.isArray(data.mixGrades) ? data.mixGrades : [],
+        currentUser: window.currentUser
+      };
+
+      if (!window.state.users || !window.state.users.length) {
+        window.state.users = [
+          { username: 'admin', password: '123', role: 'admin' },
+          { username: 'Jagath', password: '123', role: 'operator' },
+          { username: 'Pushpe', password: '123', role: 'operator' },
+          { username: 'Sunil', password: '123', role: 'operator' }
+        ];
+      } else {
+        if (!window.state.users.some(u => u.username && u.username.toLowerCase() === 'admin')) {
+          window.state.users.unshift({ username: 'admin', password: '123', role: 'admin' });
+        }
+      }
+
+      let maxSeq = 0;
+      window.state.master.forEach(m => {
+        if (!m.activeAges) m.activeAges = ['3 Days', '7 Days', '14 Days', '28 Days'];
+        const n = parseInt((m.trackingNumber || '').split('-')[1], 10);
+        if (!isNaN(n) && n > maxSeq) maxSeq = n;
+      });
+      window.nextTrackingSeq = maxSeq + 1;
+
+      logActivity("Backup Restore", "—", window.currentUser ? window.currentUser.username : 'Admin', `Restored database backup (${window.state.master.length} castings, ${window.state.tests.length} tests, ${window.state.crmVisits.length} CRM inquiries)`);
+
+      // Await saving to LocalStorage and Cloud Firestore
+      await saveState();
+
+      // Push collection entities to Firestore if active
+      if (isFirebaseActive()) {
+        for (const m of window.state.master) {
+          await addCastingRecord(m);
+        }
+        for (const t of window.state.tests) {
+          await addCubeTestResult(t);
+        }
+        for (const v of window.state.crmVisits) {
+          await addCRMSiteVisit(v);
+        }
+        for (const k of window.state.skippedTests) {
+          await addTestSkipLog(k);
+        }
+        console.log("🔥 All imported entities synced directly to Cloud Firestore collections.");
+      }
+
+      // Re-render UI views
+      if (typeof window.updateSuggestions === 'function') window.updateSuggestions();
+      if (typeof window.renderTestingSidebarList === 'function') window.renderTestingSidebarList();
+      if (typeof window.renderMaster === 'function') window.renderMaster();
+      if (typeof window.renderDashboard === 'function') window.renderDashboard();
+      if (typeof window.renderWarnings === 'function') window.renderWarnings();
+      if (typeof window.renderActivityLog === 'function') window.renderActivityLog();
+      if (typeof window.renderUsers === 'function') window.renderUsers();
+      if (typeof window.renderSchedule === 'function') window.renderSchedule();
+
+      window.toast?.('Database backup restored and synced to Firebase Cloud Firestore successfully.');
+    } catch (err) {
+      console.error("Import error:", err);
+      window.toast?.('Failed to restore backup — invalid JSON file format.');
+    }
+  };
+  reader.readAsText(file);
+  evt.target.value = '';
+}
+
 // Expose app controller methods to window object
 window.saveState = saveState;
 window.loadState = loadState;
 window.saveCubeEntry = saveCubeEntry;
 window.saveTestResult = saveTestResult;
 window.saveCRMSiteVisit = saveCRMSiteVisit;
+window.importJSON = importJSON;
 window.logActivity = logActivity;
 
 // Initialize App Data on DOM Load

@@ -3312,34 +3312,83 @@ function exportJSON(){
   toast('JSON database backup downloaded.');
 }
 
-function importJSON(evt){
+async function importJSON(evt){
   if(!isAdmin()){ toast('Access Denied: Only Admins can restore JSON backups.'); return; }
   const file = evt.target.files[0];
   if(!file) return;
   const reader = new FileReader();
-  reader.onload = e=>{
+  reader.onload = async e=>{
     try{
       const data = JSON.parse(e.target.result);
-      if(!data.master || !data.tests) throw new Error('Invalid schema');
-      state = data;
-      if(!state.activities) state.activities = [];
-      if(!state.users) state.users = [];
+      if(!data.master && !data.tests && !data.crmVisits) throw new Error('Invalid schema');
+      
+      state = {
+        master: Array.isArray(data.master) ? data.master : [],
+        tests: Array.isArray(data.tests) ? data.tests : [],
+        activities: Array.isArray(data.activities) ? data.activities : [],
+        users: Array.isArray(data.users) ? data.users : (state.users || []),
+        skippedTests: Array.isArray(data.skippedTests) ? data.skippedTests : [],
+        crmVisits: Array.isArray(data.crmVisits) ? data.crmVisits : [],
+        mixGrades: Array.isArray(data.mixGrades) ? data.mixGrades : [],
+        currentUser: currentUser
+      };
+
+      if(!state.users || !state.users.length){
+        state.users = [
+          { username: 'admin', password: '123', role: 'admin' },
+          { username: 'Jagath', password: '123', role: 'operator' },
+          { username: 'Pushpe', password: '123', role: 'operator' },
+          { username: 'Sunil', password: '123', role: 'operator' }
+        ];
+      } else {
+        if(!state.users.some(u => u.username && u.username.toLowerCase() === 'admin')){
+          state.users.unshift({ username: 'admin', password: '123', role: 'admin' });
+        }
+      }
+
       let maxSeq = 0;
       state.master.forEach(m=>{
-        const n = parseInt(m.trackingNumber.split('-')[1],10);
+        if(!m.activeAges) m.activeAges = ['3 Days', '7 Days', '14 Days', '28 Days'];
+        const n = parseInt((m.trackingNumber || '').split('-')[1],10);
         if(!isNaN(n) && n>maxSeq) maxSeq=n;
       });
       nextTrackingSeq = maxSeq+1;
 
-      logActivity("Backup Restore", "—", currentUser ? currentUser.username : 'Admin', `Restored database backup (${state.master.length} castings, ${state.tests.length} tests)`);
+      logActivity("Backup Restore", "—", currentUser ? currentUser.username : 'Admin', `Restored database backup (${state.master.length} castings, ${state.tests.length} tests, ${state.crmVisits.length} CRM inquiries)`);
 
-      saveState();
-      updateSuggestions();
-      renderTestingSidebarList();
-      renderMaster();
-      renderDashboard();
-      toast('Database backup restored successfully.');
+      // Await saving to LocalStorage and Cloud Firestore
+      await saveState();
+
+      // Push collection documents directly to Cloud Firestore if DB module is active
+      if(window.dbAPI && window.dbAPI.isFirebaseActive()){
+        for(const m of state.master){
+          await window.dbAPI.addCastingRecord(m);
+        }
+        for(const t of state.tests){
+          await window.dbAPI.addCubeTestResult(t);
+        }
+        for(const v of state.crmVisits){
+          await window.dbAPI.addCRMSiteVisit(v);
+        }
+        for(const k of state.skippedTests){
+          await window.dbAPI.addTestSkipLog(k);
+        }
+        console.log("🔥 All imported collections synced directly to Cloud Firestore collections.");
+      }
+
+      // Re-render UI views
+      if(typeof updateSuggestions === 'function') updateSuggestions();
+      if(typeof renderTestingSidebarList === 'function') renderTestingSidebarList();
+      if(typeof renderMaster === 'function') renderMaster();
+      if(typeof renderDashboard === 'function') renderDashboard();
+      if(typeof renderWarnings === 'function') renderWarnings();
+      if(typeof renderActivityLog === 'function') renderActivityLog();
+      if(typeof renderUsers === 'function') renderUsers();
+      if(typeof renderSchedule === 'function') renderSchedule();
+
+      toast('Database backup restored and synced to Firebase Cloud Firestore successfully.');
     }catch(err){
+      console.error("Import error:", err);
       toast('Failed to restore backup — invalid JSON file format.');
     }
   };
