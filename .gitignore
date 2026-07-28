@@ -1,3 +1,6 @@
+venv/
+check_braces.py
+clean.js
+full_diff.txt
+temp.js
 .DS_Store
-*.log
-node_modules/
