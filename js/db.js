@@ -1,11 +1,11 @@
 // js/db.js
 /* =========================================================================
    TOKYO SUPERMIX / APURA RMC PLANT — SALES & QC MANAGEMENT SYSTEM
-   DatabaseManager Class & Firebase Firestore Database Communication Module
-   (Strict Top-Down Cloud -> Local Initialization Architecture)
+   Cloud-First, Local-Cache Database Engine & Firebase Firestore Synchronization
    ========================================================================= */
 
 const LS_KEY = 'apura_rmc_qc_data_v1';
+const LS_SYNC_QUEUE = 'apura_rmc_qc_sync_queue_v1';
 
 // Production Firebase Configuration for APURA RMC PLANT
 const firebaseConfig = {
@@ -22,6 +22,7 @@ export class DatabaseManager {
     this.db = null;
     this.firebaseActive = false;
     this.initFirebase();
+    this.setupNetworkListeners();
   }
 
   /**
@@ -34,24 +35,22 @@ export class DatabaseManager {
           firebase.initializeApp(firebaseConfig);
         }
         this.db = firebase.firestore();
-        // Enable Long Polling to prevent WebChannel RPC Write stream transport errors
         this.db.settings({
           experimentalForceLongPolling: true,
           merge: true
         });
 
-        // Enable Offline IndexedDB Persistence
         this.db.enablePersistence({ synchronizeTabs: true }).catch((err) => {
           console.warn("⚠️ Firestore persistence notice:", err.code);
         });
 
         this.firebaseActive = true;
-        console.log("🔥 Firebase Firestore DatabaseManager connected via Compat CDN API.");
+        console.log("🔥 Firebase Firestore DatabaseManager initialized (Cloud-First Architecture).");
       } else {
         console.warn("⚠️ Firebase Compat SDK not available globally on window.");
       }
     } catch (err) {
-      console.warn("⚠️ Firebase initialization error. Falling back to LocalStorage:", err);
+      console.warn("⚠️ Firebase initialization error:", err);
     }
   }
 
@@ -59,77 +58,82 @@ export class DatabaseManager {
     return this.firebaseActive && this.db !== null;
   }
 
-  /**
-   * Single Source of Truth on Startup: Fetches live data directly FROM Firebase Cloud Firestore.
-   * If data exists in Firebase, populates window.state and caches to LocalStorage.
-   * STRICT RULE: NEVER pushes or syncs LocalStorage data to Firebase during initialization.
-   */
-  async loadFromFirebase() {
-    if (!this.isFirebaseActive()) return false;
-    try {
-      const docRef = this.db.collection("apura_qc_system").doc("main_state");
-      const snap = await docRef.get();
-      if (snap.exists) {
-        const cloudData = snap.data();
-        if (cloudData && typeof cloudData === 'object') {
-          window.state = {
-            master: Array.isArray(cloudData.master) ? cloudData.master : [],
-            tests: Array.isArray(cloudData.tests) ? cloudData.tests : [],
-            activities: Array.isArray(cloudData.activities) ? cloudData.activities : [],
-            users: Array.isArray(cloudData.users) ? cloudData.users : [],
-            skippedTests: Array.isArray(cloudData.skippedTests) ? cloudData.skippedTests : [],
-            crmVisits: Array.isArray(cloudData.crmVisits) ? cloudData.crmVisits : [],
-            mixGrades: Array.isArray(cloudData.mixGrades) ? cloudData.mixGrades : [],
-            currentUser: null
-          };
-
-          // Cache cloud state to LocalStorage for offline backup (WITHOUT pushing to Firebase)
-          localStorage.setItem(LS_KEY, JSON.stringify(window.state));
-          console.log("☁️ Primary Cloud Firestore state loaded as Single Source of Truth on startup.");
-          return true;
-        }
-      }
-    } catch (err) {
-      console.warn("⚠️ loadFromFirebase error, falling back to Local Storage:", err);
-    }
-    return false;
-  }
-
-  /**
-   * Saves global application state to Local Storage and Cloud Firestore document.
-   * STRICT RULE: Called ONLY when user explicitly performs an action (form submission, JSON restore, etc.).
-   * @param {Object} stateData - Unified state object
-   */
-  async saveState(stateData) {
-    const targetState = stateData || window.state;
-    try {
-      localStorage.setItem(LS_KEY, JSON.stringify(targetState));
-      if (this.isFirebaseActive()) {
-        if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-          console.log("⚡ Device offline: Data preserved in LocalStorage and IndexedDB queue.");
-          return true;
-        }
-        const cleanState = JSON.parse(JSON.stringify(targetState));
-        await this.db.collection("apura_qc_system").doc("main_state").set(cleanState);
-        console.log("☁️ State synced to Cloud Firestore (apura_qc_system/main_state).");
-      }
-      return true;
-    } catch (err) {
-      console.warn("⚡ Firestore save queued locally (offline / network error):", err.message || err);
-      return false;
+  setupNetworkListeners() {
+    if (typeof window !== 'undefined') {
+      window.addEventListener('online', () => {
+        console.log("🌐 Internet connection restored. Processing offline sync queue...");
+        this.syncOfflineQueue();
+      });
     }
   }
 
-  /**
-   * Top-Down Initialization Logic: Loads state FROM Cloud Firestore first on app load.
-   * DOES NOT push LocalStorage or seed data to Firebase on page load.
-   */
-  async loadState() {
-    // 1. Attempt to fetch from Firebase Cloud Firestore first
-    let loadedFromCloud = await this.loadFromFirebase();
+  /* =========================================================================
+     1. ON APP LOAD (Read-Only Cloud-First Initialization)
+     ========================================================================= */
 
-    // 2. If Cloud read failed or offline, fallback to LocalStorage
-    if (!loadedFromCloud) {
+  /**
+   * Fetches all live collections directly from Cloud Firestore on application startup.
+   * OVERWRITES browser LocalStorage with fresh Cloud Firestore data.
+   * STRICT RULE: NEVER pushes LocalStorage data to Firebase on startup!
+   */
+  async initializeApp() {
+    console.log("☁️ Executing Cloud-First Startup Initialization...");
+    let loadedFromCloud = false;
+
+    if (this.isFirebaseActive()) {
+      try {
+        // Option A: Primary Document Sync
+        const docRef = this.db.collection("apura_qc_system").doc("main_state");
+        const snap = await docRef.get();
+
+        if (snap.exists) {
+          const cloudData = snap.data();
+          if (cloudData && typeof cloudData === 'object') {
+            window.state = {
+              master: Array.isArray(cloudData.master) ? cloudData.master : [],
+              tests: Array.isArray(cloudData.tests) ? cloudData.tests : [],
+              activities: Array.isArray(cloudData.activities) ? cloudData.activities : [],
+              users: Array.isArray(cloudData.users) ? cloudData.users : [],
+              skippedTests: Array.isArray(cloudData.skippedTests) ? cloudData.skippedTests : [],
+              crmVisits: Array.isArray(cloudData.crmVisits) ? cloudData.crmVisits : [],
+              mixGrades: Array.isArray(cloudData.mixGrades) ? cloudData.mixGrades : [],
+              currentUser: null
+            };
+            loadedFromCloud = true;
+          }
+        } else {
+          // Option B: Multi-collection read fallback
+          const masterSnap = await this.db.collection("casting_records").get();
+          const testsSnap = await this.db.collection("cube_tests").get();
+          const crmSnap = await this.db.collection("crm_site_visits").get();
+
+          const masterList = [];
+          masterSnap.forEach(d => masterList.push(d.data()));
+
+          const testList = [];
+          testsSnap.forEach(d => testList.push(d.data()));
+
+          const crmList = [];
+          crmSnap.forEach(d => crmList.push(d.data()));
+
+          if (masterList.length || testList.length || crmList.length) {
+            window.state.master = masterList;
+            window.state.tests = testList;
+            window.state.crmVisits = crmList;
+            loadedFromCloud = true;
+          }
+        }
+      } catch (err) {
+        console.warn("⚠️ Cloud Firestore startup fetch error, resorting to local cache:", err);
+      }
+    }
+
+    if (loadedFromCloud) {
+      // Overwrite LocalStorage cache with fresh cloud state
+      localStorage.setItem(LS_KEY, JSON.stringify(window.state));
+      console.log("✅ Application State initialized from Cloud Firestore & LocalStorage cache updated.");
+    } else {
+      // Offline fallback: load from LocalStorage cache
       const raw = localStorage.getItem(LS_KEY);
       if (raw) {
         try {
@@ -144,8 +148,9 @@ export class DatabaseManager {
             mixGrades: Array.isArray(parsed.mixGrades) ? parsed.mixGrades : [],
             currentUser: null
           };
+          console.log("⚡ Offline mode: Application State initialized from LocalStorage cache.");
         } catch (e) {
-          console.error("Error parsing Local Storage state:", e);
+          console.error("Error parsing Local Storage cache:", e);
         }
       } else {
         this.seedInitialData();
@@ -173,15 +178,141 @@ export class DatabaseManager {
     });
     window.nextTrackingSeq = maxSeq + 1;
 
-    // STRICT RULE: DO NOT call saveState() here on page load!
+    // Process any pending offline sync queue
+    this.syncOfflineQueue();
+
     return window.state;
   }
 
+  /* =========================================================================
+     2. ON DATA INPUT / CREATION (Direct Target Document Writes)
+     ========================================================================= */
+
   /**
-   * Imports a Master DB JSON backup file using FileReader, updates local state,
-   * and performs asynchronous batch writes to Cloud Firestore collections.
-   * @param {File} file - Uploaded JSON backup file
+   * Creates a new document directly in Cloud Firestore.
+   * Updates local state & LocalStorage cache ONLY after successful write or queueing.
    */
+  async createDocument(collectionName, docId, data) {
+    const cleanData = JSON.parse(JSON.stringify(data));
+    let cloudSaved = false;
+
+    if (this.isFirebaseActive() && navigator.onLine !== false) {
+      try {
+        await this.db.collection(collectionName).doc(docId).set(cleanData);
+        // Also update main document state
+        await this.saveMainStateDoc();
+        cloudSaved = true;
+        console.log(`☁️ Successfully created document in '${collectionName}/${docId}'.`);
+      } catch (err) {
+        console.warn(`⚠️ Cloud write error for '${collectionName}/${docId}', queueing offline:`, err);
+        this.enqueueOfflineOp({ type: 'set', collection: collectionName, docId, data: cleanData });
+      }
+    } else {
+      console.log(`⚡ Offline: Queued creation operation for '${collectionName}/${docId}'.`);
+      this.enqueueOfflineOp({ type: 'set', collection: collectionName, docId, data: cleanData });
+    }
+
+    // Always update LocalStorage cache
+    localStorage.setItem(LS_KEY, JSON.stringify(window.state));
+    return cloudSaved;
+  }
+
+  /* =========================================================================
+     3. ON DATA UPDATE (Targeted Cloud Update)
+     ========================================================================= */
+
+  /**
+   * Performs a targeted update on a specific document in Cloud Firestore.
+   */
+  async updateDocument(collectionName, docId, updateFields) {
+    const cleanFields = JSON.parse(JSON.stringify(updateFields));
+    let cloudUpdated = false;
+
+    if (this.isFirebaseActive() && navigator.onLine !== false) {
+      try {
+        await this.db.collection(collectionName).doc(docId).update(cleanFields);
+        await this.saveMainStateDoc();
+        cloudUpdated = true;
+        console.log(`☁️ Successfully updated target document '${collectionName}/${docId}'.`);
+      } catch (err) {
+        console.warn(`⚠️ Targeted update error for '${collectionName}/${docId}', queueing offline:`, err);
+        this.enqueueOfflineOp({ type: 'update', collection: collectionName, docId, data: cleanFields });
+      }
+    } else {
+      this.enqueueOfflineOp({ type: 'update', collection: collectionName, docId, data: cleanFields });
+    }
+
+    localStorage.setItem(LS_KEY, JSON.stringify(window.state));
+    return cloudUpdated;
+  }
+
+  /**
+   * Updates main unified state document in Firestore.
+   */
+  async saveMainStateDoc() {
+    if (!this.isFirebaseActive() || navigator.onLine === false) return;
+    try {
+      const cleanState = JSON.parse(JSON.stringify(window.state));
+      await this.db.collection("apura_qc_system").doc("main_state").set(cleanState);
+    } catch (err) {
+      console.warn("⚠️ saveMainStateDoc notice:", err.message);
+    }
+  }
+
+  /* =========================================================================
+     4. OFFLINE FALLBACK & SYNC QUEUE MANAGEMENT
+     ========================================================================= */
+
+  enqueueOfflineOp(operation) {
+    try {
+      const queue = JSON.parse(localStorage.getItem(LS_SYNC_QUEUE) || '[]');
+      queue.push({ ...operation, timestamp: Date.now() });
+      localStorage.setItem(LS_SYNC_QUEUE, JSON.stringify(queue));
+      window.toast?.("⚡ Operation saved to offline queue. Will sync when reconnected.");
+    } catch (e) {
+      console.error("Error enqueueing offline operation:", e);
+    }
+  }
+
+  async syncOfflineQueue() {
+    if (!this.isFirebaseActive() || navigator.onLine === false) return;
+    const rawQueue = localStorage.getItem(LS_SYNC_QUEUE);
+    if (!rawQueue) return;
+
+    try {
+      const queue = JSON.parse(rawQueue);
+      if (!queue.length) return;
+
+      console.log(`🔄 Flushing ${queue.length} queued offline operations to Cloud Firestore...`);
+      const remaining = [];
+
+      for (const op of queue) {
+        try {
+          if (op.type === 'set') {
+            await this.db.collection(op.collection).doc(op.docId).set(op.data);
+          } else if (op.type === 'update') {
+            await this.db.collection(op.collection).doc(op.docId).update(op.data);
+          }
+        } catch (err) {
+          console.warn(`⚠️ Failed to sync queued item ${op.collection}/${op.docId}:`, err);
+          remaining.push(op);
+        }
+      }
+
+      localStorage.setItem(LS_SYNC_QUEUE, JSON.stringify(remaining));
+      if (remaining.length < queue.length) {
+        await this.saveMainStateDoc();
+        window.toast?.("☁️ Offline sync complete. Cloud Firestore updated.");
+      }
+    } catch (e) {
+      console.error("Error processing offline sync queue:", e);
+    }
+  }
+
+  /* =========================================================================
+     MASTER BACKUP IMPORT & UTILITIES
+     ========================================================================= */
+
   async importMasterDB(file) {
     if (!file) return false;
     return new Promise((resolve, reject) => {
@@ -193,7 +324,6 @@ export class DatabaseManager {
             throw new Error("Invalid Master Database JSON schema");
           }
 
-          // Update application state
           window.state = {
             master: Array.isArray(data.master) ? data.master : [],
             tests: Array.isArray(data.tests) ? data.tests : [],
@@ -217,40 +347,25 @@ export class DatabaseManager {
           });
           window.nextTrackingSeq = maxSeq + 1;
 
-          this.logActivity(
-            "Backup Restore", 
-            "—", 
-            window.currentUser ? window.currentUser.username : 'Admin', 
-            `Restored database backup (${window.state.master.length} castings, ${window.state.tests.length} tests, ${window.state.crmVisits.length} CRM inquiries)`
-          );
+          this.logActivity("Backup Restore", "—", window.currentUser ? window.currentUser.username : 'Admin', `Restored database backup (${window.state.master.length} castings)`);
 
-          // User explicitly triggered restore — save to Cloud Firestore & LocalStorage
-          await this.saveState(window.state);
+          localStorage.setItem(LS_KEY, JSON.stringify(window.state));
+          await this.saveMainStateDoc();
 
-          // Batch Sync to Cloud Firestore Individual Collections
           if (this.isFirebaseActive()) {
             const batch = this.db.batch();
-            
             for (const m of window.state.master) {
-              const ref = this.db.collection("casting_records").doc(m.trackingNumber);
-              batch.set(ref, JSON.parse(JSON.stringify(m)));
+              batch.set(this.db.collection("casting_records").doc(m.trackingNumber), JSON.parse(JSON.stringify(m)));
             }
-
             for (const t of window.state.tests) {
-              const ref = this.db.collection("cube_tests").doc(t.testId);
-              batch.set(ref, JSON.parse(JSON.stringify(t)));
+              batch.set(this.db.collection("cube_tests").doc(t.testId), JSON.parse(JSON.stringify(t)));
             }
-
             for (const v of window.state.crmVisits) {
-              const ref = this.db.collection("crm_site_visits").doc(v.visitId || `CRM-${Date.now()}`);
-              batch.set(ref, JSON.parse(JSON.stringify(v)));
+              batch.set(this.db.collection("crm_site_visits").doc(v.visitId || `CRM-${Date.now()}`), JSON.parse(JSON.stringify(v)));
             }
-
             await batch.commit();
-            console.log("🔥 Master DB JSON batch write successfully committed to Cloud Firestore.");
           }
 
-          // Trigger UI updates
           if (typeof window.updateSuggestions === 'function') window.updateSuggestions();
           if (typeof window.renderTestingSidebarList === 'function') window.renderTestingSidebarList();
           if (typeof window.renderMaster === 'function') window.renderMaster();
@@ -286,39 +401,6 @@ export class DatabaseManager {
       window.toast?.('Master Database JSON backup exported.');
     } catch (err) {
       console.error("⚠️ exportMasterDB error:", err);
-    }
-  }
-
-  async addCastingRecord(record) {
-    if (!this.isFirebaseActive()) return false;
-    try {
-      await this.db.collection("casting_records").doc(record.trackingNumber).set(JSON.parse(JSON.stringify(record)));
-      return true;
-    } catch (err) {
-      console.error("⚠️ addCastingRecord error:", err);
-      return false;
-    }
-  }
-
-  async addCubeTestResult(testData) {
-    if (!this.isFirebaseActive()) return false;
-    try {
-      await this.db.collection("cube_tests").doc(testData.testId).set(JSON.parse(JSON.stringify(testData)));
-      return true;
-    } catch (err) {
-      console.error("⚠️ addCubeTestResult error:", err);
-      return false;
-    }
-  }
-
-  async addCRMSiteVisit(visitData) {
-    if (!this.isFirebaseActive()) return false;
-    try {
-      await this.db.collection("crm_site_visits").doc(visitData.visitId || `CRM-${Date.now()}`).set(JSON.parse(JSON.stringify(visitData)));
-      return true;
-    } catch (err) {
-      console.error("⚠️ addCRMSiteVisit error:", err);
-      return false;
     }
   }
 

@@ -31,7 +31,7 @@ window.nextTrackingSeq = 1;
  * Initializes application event listeners, loads database state, and binds handlers on DOM load.
  */
 document.addEventListener('DOMContentLoaded', async () => {
-  console.log("🚀 Initializing Tokyo Supermix RMC Master Application...");
+  console.log("🚀 Initializing Tokyo Supermix RMC Master Application (Cloud-First Architecture)...");
 
   // Intercept all form submit events to prevent page reloads
   setupFormInterceptors();
@@ -39,8 +39,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Attach Database Restore (JSON) and Export event listeners
   setupDatabaseIO();
 
-  // Load state from Cloud Firestore or LocalStorage
-  await dbManager.loadState();
+  // Load state directly from Cloud Firestore (overwriting LocalStorage cache)
+  await dbManager.initializeApp();
 
   // Run initial AI insights computation and QA test suite check
   if (typeof window.generateAIExecutiveInsights === 'function') {
@@ -199,8 +199,8 @@ export async function saveCubeEntry(e) {
   window.state.master.push(castingRecord);
   dbManager.logActivity("New Entry", tn, castedBy, `Created casting record for ${customer} at ${site} (${numCubes} Cubes, ${volume} m³)`);
 
-  await dbManager.addCastingRecord(castingRecord);
-  await dbManager.saveState(window.state);
+  // Direct targeted write to Cloud Firestore collection 'casting_records'
+  await dbManager.createDocument("casting_records", tn, castingRecord);
 
   if (typeof window.updateSuggestions === 'function') window.updateSuggestions();
   if (typeof window.renderTestingSidebarList === 'function') window.renderTestingSidebarList();
@@ -251,8 +251,8 @@ export async function saveTestResult(e) {
   window.state.tests.push(testData);
   dbManager.logActivity("Test Recorded", tn, testedBy, `Recorded ${ageLabel} test ${testId} (${strength} N/mm², ${load} kN)`);
 
-  await dbManager.addCubeTestResult(testData);
-  await dbManager.saveState(window.state);
+  // Direct targeted write to Cloud Firestore collection 'cube_tests'
+  await dbManager.createDocument("cube_tests", testId, testData);
 
   if (typeof window.renderTestingSidebarList === 'function') window.renderTestingSidebarList();
   window.toast?.(`Test result ${testId} recorded (${strength} N/mm²).`);
@@ -264,5 +264,5 @@ window.exportJSON = exportJSON;
 window.exportExcel = exportExcel;
 window.saveCubeEntry = saveCubeEntry;
 window.saveTestResult = saveTestResult;
-window.saveState = (st) => dbManager.saveState(st);
-window.loadState = () => dbManager.loadState();
+window.saveState = (st) => dbManager.saveMainStateDoc(st);
+window.loadState = () => dbManager.initializeApp();
