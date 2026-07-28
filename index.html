@@ -1575,30 +1575,38 @@ function populateSampleDataIfEmpty(){
 }
 
 /* ---------------------- PERSISTENCE ---------------------- */
-function saveState(){
-  localStorage.setItem(LS_KEY, JSON.stringify(state));
-  if(window.saveStateToFirebase){
-    window.saveStateToFirebase(state);
+async function saveState(){
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify(state));
+    if(window.saveStateToFirebase){
+      await window.saveStateToFirebase(state);
+    }
+  } catch (err) {
+    console.error("⚠️ Error during state persistence:", err);
   }
 }
 
 async function loadState(){
   let loadedFromCloud = false;
-  if(window.loadStateFromFirebase){
-    const cloudData = await window.loadStateFromFirebase();
-    if(cloudData && typeof cloudData === 'object'){
-      state = {
-        master: Array.isArray(cloudData.master) ? cloudData.master : [],
-        tests: Array.isArray(cloudData.tests) ? cloudData.tests : [],
-        activities: Array.isArray(cloudData.activities) ? cloudData.activities : [],
-        users: Array.isArray(cloudData.users) ? cloudData.users : [],
-        skippedTests: Array.isArray(cloudData.skippedTests) ? cloudData.skippedTests : [],
-        currentUser: null
-      };
-      if(state.master.length || state.tests.length) {
-        loadedFromCloud = true;
+  try {
+    if(window.loadStateFromFirebase){
+      const cloudData = await window.loadStateFromFirebase();
+      if(cloudData && typeof cloudData === 'object'){
+        state = {
+          master: Array.isArray(cloudData.master) ? cloudData.master : [],
+          tests: Array.isArray(cloudData.tests) ? cloudData.tests : [],
+          activities: Array.isArray(cloudData.activities) ? cloudData.activities : [],
+          users: Array.isArray(cloudData.users) ? cloudData.users : [],
+          skippedTests: Array.isArray(cloudData.skippedTests) ? cloudData.skippedTests : [],
+          currentUser: null
+        };
+        if(state.master.length || state.tests.length) {
+          loadedFromCloud = true;
+        }
       }
     }
+  } catch (err) {
+    console.warn("⚠️ Cloud load error, falling back to localStorage:", err);
   }
 
   if(!loadedFromCloud){
@@ -1652,7 +1660,7 @@ async function loadState(){
     }
   }
 
-  saveState();
+  await saveState();
   updateSuggestions();
 
   currentUser = null;
