@@ -1,7 +1,7 @@
 // js/db.js
 /* =========================================================================
-   APURA / TOKYO SUPERMIX RMC QC & SALES MANAGEMENT SYSTEM
-   Firebase Firestore Database Communication & CRUD API Module
+   TOKYO SUPERMIX / APURA RMC PLANT — SALES & QC MANAGEMENT SYSTEM
+   DatabaseManager Class & Firebase Firestore Database Communication Module
    ========================================================================= */
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
@@ -11,14 +11,12 @@ import {
   setDoc, 
   getDoc, 
   collection, 
-  addDoc, 
+  writeBatch,
   updateDoc, 
-  deleteDoc, 
-  getDocs, 
-  query, 
-  where, 
-  orderBy 
+  deleteDoc 
 } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+
+const LS_KEY = 'apura_rmc_qc_data_v1';
 
 // Production Firebase Configuration for APURA RMC PLANT
 const firebaseConfig = {
@@ -30,217 +28,334 @@ const firebaseConfig = {
   appId: "1:521259667866:web:c46d5156a65e592ba46a23"
 };
 
-let db = null;
-let firebaseActive = false;
-
-// Initialize Firebase App & Cloud Firestore Service
-try {
-  if (firebaseConfig.apiKey) {
-    const app = initializeApp(firebaseConfig);
-    db = getFirestore(app);
-    firebaseActive = true;
-    console.log("🔥 Firebase Cloud Firestore initialized successfully for apura-rmc-qc.");
+export class DatabaseManager {
+  constructor() {
+    this.db = null;
+    this.firebaseActive = false;
+    this.initFirebase();
   }
-} catch (err) {
-  console.warn("⚠️ Firebase Cloud Firestore initialization failed. Local Storage fallback active:", err);
-}
 
-/**
- * Checks if Cloud Firestore service is active and connected
- */
-export function isFirebaseActive() {
-  return firebaseActive && db !== null;
-}
-
-/**
- * Saves the entire global application state object to Cloud Firestore as a unified document.
- * @param {Object} stateData - Complete state JSON tree { master, tests, activities, users, skippedTests, crmVisits, mixGrades }
- * @returns {Promise<boolean>} Success status
- */
-export async function saveStateToFirestore(stateData) {
-  if (!isFirebaseActive()) return false;
-  try {
-    const cleanState = JSON.parse(JSON.stringify(stateData));
-    const docRef = doc(db, "apura_qc_system", "main_state");
-    await setDoc(docRef, cleanState);
-    console.log("☁️ Full system state saved to Cloud Firestore (apura_qc_system/main_state).");
-    return true;
-  } catch (err) {
-    console.error("⚠️ Error saving state to Cloud Firestore:", err);
-    return false;
-  }
-}
-
-/**
- * Retrieves the full system state document from Cloud Firestore.
- * @returns {Promise<Object|null>} State data object or null if unavailable
- */
-export async function loadStateFromFirestore() {
-  if (!isFirebaseActive()) return null;
-  try {
-    const docRef = doc(db, "apura_qc_system", "main_state");
-    const snap = await getDoc(docRef);
-    if (snap.exists()) {
-      console.log("☁️ Full system state loaded from Cloud Firestore (apura_qc_system/main_state).");
-      return snap.data();
-    } else {
-      console.log("ℹ️ No existing Cloud Firestore document found. Default initialized.");
+  /**
+   * Initializes Firebase App & Cloud Firestore Service
+   */
+  initFirebase() {
+    try {
+      if (firebaseConfig.apiKey) {
+        const app = initializeApp(firebaseConfig);
+        this.db = getFirestore(app);
+        this.firebaseActive = true;
+        console.log("🔥 Firebase Cloud Firestore DatabaseManager initialized successfully.");
+      }
+    } catch (err) {
+      console.warn("⚠️ Firebase Cloud Firestore initialization failed. Local Storage fallback active:", err);
     }
-  } catch (err) {
-    console.error("⚠️ Error loading state from Cloud Firestore:", err);
   }
-  return null;
+
+  isFirebaseActive() {
+    return this.firebaseActive && this.db !== null;
+  }
+
+  /**
+   * Saves global application state to Local Storage and Cloud Firestore.
+   * @param {Object} stateData - Unified state object
+   */
+  async saveState(stateData) {
+    const targetState = stateData || window.state;
+    try {
+      localStorage.setItem(LS_KEY, JSON.stringify(targetState));
+      if (this.isFirebaseActive()) {
+        const cleanState = JSON.parse(JSON.stringify(targetState));
+        const docRef = doc(this.db, "apura_qc_system", "main_state");
+        await setDoc(docRef, cleanState);
+        console.log("☁️ State synced to Cloud Firestore (apura_qc_system/main_state).");
+      }
+      return true;
+    } catch (err) {
+      console.error("⚠️ DatabaseManager saveState error:", err);
+      return false;
+    }
+  }
+
+  /**
+   * Loads global application state from Cloud Firestore or Local Storage.
+   */
+  async loadState() {
+    let loadedFromCloud = false;
+    try {
+      if (this.isFirebaseActive()) {
+        const docRef = doc(this.db, "apura_qc_system", "main_state");
+        const snap = await getDoc(docRef);
+        if (snap.exists()) {
+          const cloudData = snap.data();
+          if (cloudData && typeof cloudData === 'object') {
+            window.state = {
+              master: Array.isArray(cloudData.master) ? cloudData.master : [],
+              tests: Array.isArray(cloudData.tests) ? cloudData.tests : [],
+              activities: Array.isArray(cloudData.activities) ? cloudData.activities : [],
+              users: Array.isArray(cloudData.users) ? cloudData.users : [],
+              skippedTests: Array.isArray(cloudData.skippedTests) ? cloudData.skippedTests : [],
+              crmVisits: Array.isArray(cloudData.crmVisits) ? cloudData.crmVisits : [],
+              mixGrades: Array.isArray(cloudData.mixGrades) ? cloudData.mixGrades : [],
+              currentUser: null
+            };
+            if (window.state.master.length || window.state.tests.length) {
+              loadedFromCloud = true;
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("⚠️ Firestore loadState failed, resorting to Local Storage:", err);
+    }
+
+    if (!loadedFromCloud) {
+      const raw = localStorage.getItem(LS_KEY);
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw);
+          window.state = {
+            master: Array.isArray(parsed.master) ? parsed.master : [],
+            tests: Array.isArray(parsed.tests) ? parsed.tests : [],
+            activities: Array.isArray(parsed.activities) ? parsed.activities : [],
+            users: Array.isArray(parsed.users) ? parsed.users : [],
+            skippedTests: Array.isArray(parsed.skippedTests) ? parsed.skippedTests : [],
+            crmVisits: Array.isArray(parsed.crmVisits) ? parsed.crmVisits : [],
+            mixGrades: Array.isArray(parsed.mixGrades) ? parsed.mixGrades : [],
+            currentUser: null
+          };
+        } catch (e) {
+          console.error("Error parsing Local Storage state:", e);
+        }
+      } else {
+        this.seedInitialData();
+      }
+    }
+
+    // Default arrays & Admin user verification
+    if (!window.state.master) window.state.master = [];
+    if (!window.state.tests) window.state.tests = [];
+    if (!window.state.activities) window.state.activities = [];
+    if (!window.state.users) window.state.users = [];
+    if (!window.state.skippedTests) window.state.skippedTests = [];
+    if (!window.state.crmVisits) window.state.crmVisits = [];
+    if (!window.state.mixGrades) window.state.mixGrades = [];
+
+    if (!window.state.users.some(u => u.username && u.username.toLowerCase() === 'admin')) {
+      window.state.users.unshift({ username: 'admin', password: '123', role: 'admin' });
+    }
+
+    let maxSeq = 0;
+    window.state.master.forEach(m => {
+      if (!m.activeAges) m.activeAges = ['3 Days', '7 Days', '14 Days', '28 Days'];
+      const n = parseInt((m.trackingNumber || '').split('-')[1], 10);
+      if (!isNaN(n) && n > maxSeq) maxSeq = n;
+    });
+    window.nextTrackingSeq = maxSeq + 1;
+
+    await this.saveState(window.state);
+    return window.state;
+  }
+
+  /**
+   * Imports a Master DB JSON backup file using FileReader, updates local state,
+   * and performs asynchronous batch writes to Cloud Firestore collections.
+   * @param {File} file - Uploaded JSON backup file
+   */
+  async importMasterDB(file) {
+    if (!file) return false;
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const data = JSON.parse(e.target.result);
+          if (!data.master && !data.tests && !data.crmVisits) {
+            throw new Error("Invalid Master Database JSON schema");
+          }
+
+          // Update application state
+          window.state = {
+            master: Array.isArray(data.master) ? data.master : [],
+            tests: Array.isArray(data.tests) ? data.tests : [],
+            activities: Array.isArray(data.activities) ? data.activities : [],
+            users: Array.isArray(data.users) ? data.users : (window.state.users || []),
+            skippedTests: Array.isArray(data.skippedTests) ? data.skippedTests : [],
+            crmVisits: Array.isArray(data.crmVisits) ? data.crmVisits : [],
+            mixGrades: Array.isArray(data.mixGrades) ? data.mixGrades : [],
+            currentUser: window.currentUser
+          };
+
+          if (!window.state.users.some(u => u.username && u.username.toLowerCase() === 'admin')) {
+            window.state.users.unshift({ username: 'admin', password: '123', role: 'admin' });
+          }
+
+          let maxSeq = 0;
+          window.state.master.forEach(m => {
+            if (!m.activeAges) m.activeAges = ['3 Days', '7 Days', '14 Days', '28 Days'];
+            const n = parseInt((m.trackingNumber || '').split('-')[1], 10);
+            if (!isNaN(n) && n > maxSeq) maxSeq = n;
+          });
+          window.nextTrackingSeq = maxSeq + 1;
+
+          this.logActivity(
+            "Backup Restore", 
+            "—", 
+            window.currentUser ? window.currentUser.username : 'Admin', 
+            `Restored database backup (${window.state.master.length} castings, ${window.state.tests.length} tests, ${window.state.crmVisits.length} CRM inquiries)`
+          );
+
+          // 1. Save to Local Storage & Main Document
+          await this.saveState(window.state);
+
+          // 2. Batch Sync to Cloud Firestore Collections
+          if (this.isFirebaseActive()) {
+            const batch = writeBatch(this.db);
+            
+            // Sync Master Casting Records
+            for (const m of window.state.master) {
+              const ref = doc(this.db, "casting_records", m.trackingNumber);
+              batch.set(ref, JSON.parse(JSON.stringify(m)));
+            }
+
+            // Sync Cube Test Results
+            for (const t of window.state.tests) {
+              const ref = doc(this.db, "cube_tests", t.testId);
+              batch.set(ref, JSON.parse(JSON.stringify(t)));
+            }
+
+            // Sync CRM Site Visits
+            for (const v of window.state.crmVisits) {
+              const ref = doc(this.db, "crm_site_visits", v.visitId || `CRM-${Date.now()}`);
+              batch.set(ref, JSON.parse(JSON.stringify(v)));
+            }
+
+            await batch.commit();
+            console.log("🔥 Master DB JSON batch write successfully committed to Cloud Firestore.");
+          }
+
+          // 3. Trigger UI updates
+          if (typeof window.updateSuggestions === 'function') window.updateSuggestions();
+          if (typeof window.renderTestingSidebarList === 'function') window.renderTestingSidebarList();
+          if (typeof window.renderMaster === 'function') window.renderMaster();
+          if (typeof window.renderDashboard === 'function') window.renderDashboard();
+          if (typeof window.renderWarnings === 'function') window.renderWarnings();
+          if (typeof window.renderActivityLog === 'function') window.renderActivityLog();
+          if (typeof window.renderUsers === 'function') window.renderUsers();
+          if (typeof window.renderSchedule === 'function') window.renderSchedule();
+
+          window.toast?.('Master Database restored and synced to Firebase Cloud Firestore successfully.');
+          resolve(true);
+        } catch (err) {
+          console.error("⚠️ importMasterDB error:", err);
+          window.toast?.('Failed to restore backup — invalid JSON file format.');
+          reject(err);
+        }
+      };
+      reader.onerror = (err) => reject(err);
+      reader.readAsText(file);
+    });
+  }
+
+  /**
+   * Exports Master Database state as a downloadable JSON file.
+   */
+  exportMasterDB() {
+    try {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(window.state, null, 2));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", `tokyo_supermix_qc_backup_${new Date().toISOString().slice(0,10)}.json`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+      this.logActivity("Backup Export", "—", window.currentUser ? window.currentUser.username : 'Admin', "Exported Master Database JSON backup");
+      window.toast?.('Master Database JSON backup exported.');
+    } catch (err) {
+      console.error("⚠️ exportMasterDB error:", err);
+    }
+  }
+
+  async addCastingRecord(record) {
+    if (!this.isFirebaseActive()) return false;
+    try {
+      const docRef = doc(this.db, "casting_records", record.trackingNumber);
+      await setDoc(docRef, JSON.parse(JSON.stringify(record)));
+      return true;
+    } catch (err) {
+      console.error("⚠️ addCastingRecord error:", err);
+      return false;
+    }
+  }
+
+  async addCubeTestResult(testData) {
+    if (!this.isFirebaseActive()) return false;
+    try {
+      const docRef = doc(this.db, "cube_tests", testData.testId);
+      await setDoc(docRef, JSON.parse(JSON.stringify(testData)));
+      return true;
+    } catch (err) {
+      console.error("⚠️ addCubeTestResult error:", err);
+      return false;
+    }
+  }
+
+  async addCRMSiteVisit(visitData) {
+    if (!this.isFirebaseActive()) return false;
+    try {
+      const docRef = doc(this.db, "crm_site_visits", visitData.visitId || `CRM-${Date.now()}`);
+      await setDoc(docRef, JSON.parse(JSON.stringify(visitData)));
+      return true;
+    } catch (err) {
+      console.error("⚠️ addCRMSiteVisit error:", err);
+      return false;
+    }
+  }
+
+  logActivity(actionType, trackingNumber, user, details) {
+    if (!window.state.activities) window.state.activities = [];
+    const act = {
+      id: `ACT-${String(window.state.activities.length + 1).padStart(5, '0')}`,
+      timestamp: new Date().toISOString(),
+      formattedTime: new Date().toLocaleString(),
+      actionType,
+      trackingNumber: trackingNumber || '—',
+      user: user || 'System',
+      details
+    };
+    window.state.activities.unshift(act);
+  }
+
+  seedInitialData() {
+    window.state.master = [
+      {
+        trackingNumber: "TKC-000001",
+        castingDate: "2026-01-01",
+        castTime: "09:00",
+        customer: "SRI CONSTRUCTION",
+        site: "VIJAYAPURA",
+        weather: "☀ Sunny",
+        designCode: "AB/C25/64",
+        grade: "C25",
+        slump: "160 mm",
+        cementContent: 300,
+        volume: 22.75,
+        cementSilo: "Silo 01",
+        bulkNumber: "BN-4521",
+        castedBy: "Jagath",
+        numCubes: 4,
+        activeAges: ["3 Days", "7 Days", "14 Days", "28 Days"],
+        remarks: "Plant pour Vijayapura",
+        dateCreated: "2026-01-01T09:00:00.000Z",
+        lastUpdated: "2026-01-29T10:00:00.000Z"
+      }
+    ];
+
+    window.state.tests = [
+      { testId: "TKC-000001-T1", trackingNumber: "TKC-000001", testingDate: "2026-01-08", testingAge: "7 Days", testedBy: "QC", load: 482.63, weight: 8.25, cubeSize: 150, strength: 21.45, designCode: "AB/C25/64", grade: "C25" },
+      { testId: "TKC-000001-T2", trackingNumber: "TKC-000001", testingDate: "2026-01-29", testingAge: "28 Days", testedBy: "Technician", load: 717.75, weight: 8.30, cubeSize: 150, strength: 31.90, designCode: "AB/C25/64", grade: "C25" }
+    ];
+  }
 }
 
-/**
- * Adds a new Ready-Mix Concrete (RMC) casting record to Firestore.
- * @param {Object} castingRecord - Casting metadata (trackingNumber, customer, site, grade, volume, slump, cementContent, activeAges, etc.)
- */
-export async function addCastingRecord(castingRecord) {
-  if (!isFirebaseActive()) return false;
-  try {
-    const docRef = doc(db, "casting_records", castingRecord.trackingNumber);
-    await setDoc(docRef, JSON.parse(JSON.stringify(castingRecord)));
-    console.log(`✅ Casting record ${castingRecord.trackingNumber} saved to Firestore collection.`);
-    return true;
-  } catch (err) {
-    console.error("⚠️ Error adding casting record to Firestore:", err);
-    return false;
-  }
-}
-
-/**
- * Updates parameters of an existing casting record.
- * @param {string} trackingNumber - Tracking number key (e.g., TKC-000001)
- * @param {Object} updateData - Updated parameters
- */
-export async function updateCastingRecord(trackingNumber, updateData) {
-  if (!isFirebaseActive()) return false;
-  try {
-    const docRef = doc(db, "casting_records", trackingNumber);
-    await updateDoc(docRef, JSON.parse(JSON.stringify(updateData)));
-    console.log(`✅ Casting record ${trackingNumber} updated in Firestore.`);
-    return true;
-  } catch (err) {
-    console.error(`⚠️ Error updating casting record ${trackingNumber} in Firestore:`, err);
-    return false;
-  }
-}
-
-/**
- * Adds a cube test reading (3d, 7d, 14d, 28d) to Firestore.
- * @param {Object} testData - Test result (testId, trackingNumber, testingAge, load, weight, strength, testedBy)
- */
-export async function addCubeTestResult(testData) {
-  if (!isFirebaseActive()) return false;
-  try {
-    const docRef = doc(db, "cube_tests", testData.testId);
-    await setDoc(docRef, JSON.parse(JSON.stringify(testData)));
-    console.log(`✅ Cube test result ${testData.testId} saved to Firestore.`);
-    return true;
-  } catch (err) {
-    console.error(`⚠️ Error adding cube test result ${testData.testId} to Firestore:`, err);
-    return false;
-  }
-}
-
-/**
- * Deletes a cube test sample reading.
- * @param {string} testId - Test reading identifier (e.g. TKC-000001-T1)
- */
-export async function deleteTestReading(testId) {
-  if (!isFirebaseActive()) return false;
-  try {
-    const docRef = doc(db, "cube_tests", testId);
-    await deleteDoc(docRef);
-    console.log(`🗑️ Cube test result ${testId} deleted from Firestore.`);
-    return true;
-  } catch (err) {
-    console.error(`⚠️ Error deleting cube test ${testId} from Firestore:`, err);
-    return false;
-  }
-}
-
-/**
- * Adds a new Sales CRM Site Visit & Commercial Inquiry record.
- * @param {Object} visitData - CRM Site Visit (visitId, customerName, siteLocation, contactNumber, requestedGrade, estimatedVolume, pumpRequired, pumpCarRate, stage)
- */
-export async function addCRMSiteVisit(visitData) {
-  if (!isFirebaseActive()) return false;
-  try {
-    const docRef = doc(db, "crm_site_visits", visitData.visitId || `CRM-${Date.now()}`);
-    await setDoc(docRef, JSON.parse(JSON.stringify(visitData)));
-    console.log(`💼 CRM Site Visit ${visitData.customerName} saved to Firestore.`);
-    return true;
-  } catch (err) {
-    console.error("⚠️ Error saving CRM Site Visit to Firestore:", err);
-    return false;
-  }
-}
-
-/**
- * Updates the sales CRM pipeline stage for a commercial inquiry.
- * @param {string} visitId - Visit ID
- * @param {string} newStage - Pipeline stage ('Lead', 'Site Inspection', 'Quotation Sent', 'Order Confirmed', 'Pour Completed')
- */
-export async function updateCRMPipelineStage(visitId, newStage) {
-  if (!isFirebaseActive()) return false;
-  try {
-    const docRef = doc(db, "crm_site_visits", visitId);
-    await updateDoc(docRef, { stage: newStage, lastUpdated: new Date().toISOString() });
-    console.log(`💼 CRM Visit ${visitId} updated to stage '${newStage}'.`);
-    return true;
-  } catch (err) {
-    console.error(`⚠️ Error updating CRM Pipeline Stage for ${visitId}:`, err);
-    return false;
-  }
-}
-
-/**
- * Adds or updates custom Concrete Mix Design details.
- * @param {Object} gradeData - Mix design details (gradeCode, targetStrength, cementContent, wRatio, pumpable)
- */
-export async function addConcreteGrade(gradeData) {
-  if (!isFirebaseActive()) return false;
-  try {
-    const docRef = doc(db, "concrete_mixes", gradeData.gradeCode);
-    await setDoc(docRef, JSON.parse(JSON.stringify(gradeData)));
-    console.log(`🧪 Concrete Mix Grade ${gradeData.gradeCode} saved to Firestore.`);
-    return true;
-  } catch (err) {
-    console.error("⚠️ Error saving Concrete Mix Grade to Firestore:", err);
-    return false;
-  }
-}
-
-/**
- * Logs a BS EN 12390 test skip deviation entry for Admin compliance auditing.
- * @param {Object} skipData - Test skip log (id, trackingNumber, skippedAge, skippedBy, reason, severity)
- */
-export async function addTestSkipLog(skipData) {
-  if (!isFirebaseActive()) return false;
-  try {
-    const docRef = doc(db, "skipped_test_logs", skipData.id);
-    await setDoc(docRef, JSON.parse(JSON.stringify(skipData)));
-    console.log(`⚠️ Test skip audit log ${skipData.id} recorded in Firestore.`);
-    return true;
-  } catch (err) {
-    console.error("⚠️ Error saving Test Skip Audit Log to Firestore:", err);
-    return false;
-  }
-}
-
-// Expose database module functions onto window for legacy HTML event compatibility
-window.dbAPI = {
-  isFirebaseActive,
-  saveStateToFirestore,
-  loadStateFromFirestore,
-  addCastingRecord,
-  updateCastingRecord,
-  addCubeTestResult,
-  deleteTestReading,
-  addCRMSiteVisit,
-  updateCRMPipelineStage,
-  addConcreteGrade,
-  addTestSkipLog
-};
+// Export Singleton Instance
+export const dbManager = new DatabaseManager();
+window.dbManager = dbManager;
