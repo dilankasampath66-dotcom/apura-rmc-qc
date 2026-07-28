@@ -531,9 +531,65 @@ td.mono{ font-family: var(--font-mono); font-size:13px; }
 .modal{ background:#fff; border-radius:var(--radius); padding:26px 28px; max-width:500px; width:100%; box-shadow:0 14px 40px rgba(0,0,0,0.3); }
 .modal h3{ margin-bottom:10px; color:var(--slate-deep); font-size:16.5px; }
 .modal p{ color:var(--ink-soft); font-size:14px; margin-bottom:20px; line-height:1.5; }
+/* ===================== APP LOADING SCREEN ===================== */
+#app-loader {
+  position: fixed;
+  inset: 0;
+  background: var(--slate-deep);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  transition: opacity 0.45s ease, visibility 0.45s ease;
+}
+#app-loader.hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+#app-loader .loader-brand {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+#app-loader .loader-sub {
+  font-size: 12px;
+  color: #9FB6B0;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 32px;
+}
+#app-loader .loader-ring {
+  width: 44px;
+  height: 44px;
+  border: 3px solid rgba(255,255,255,0.12);
+  border-top-color: #7FE0B8;
+  border-radius: 50%;
+  animation: spin .85s linear infinite;
+  margin-bottom: 18px;
+}
+#app-loader .loader-msg {
+  font-size: 12.5px;
+  color: #7FE0B8;
+  font-family: var(--font-mono);
+  letter-spacing: 0.04em;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
 </style>
 </head>
 <body>
+
+<!-- ===================== APP LOADING SCREEN ===================== -->
+<div id="app-loader">
+  <div class="loader-brand">APURA RMC PLANT</div>
+  <div class="loader-sub">Cube QC System &mdash; BS EN 12390</div>
+  <div class="loader-ring"></div>
+  <div class="loader-msg" id="loader-msg">Connecting to Firebase&hellip;</div>
+</div>
 
 <!-- Mobile Top Bar -->
 <div class="mobile-topbar" id="mobile-topbar" style="display:none;">
@@ -1783,10 +1839,32 @@ async function saveState(){
   }
 }
 
+// ---- Loading screen helpers ----
+function showLoader(msg) {
+  const el = document.getElementById('app-loader');
+  const msgEl = document.getElementById('loader-msg');
+  if (el) el.classList.remove('hidden');
+  if (msgEl && msg) msgEl.textContent = msg;
+}
+function hideLoader() {
+  const el = document.getElementById('app-loader');
+  if (el) el.classList.add('hidden');
+}
+
 async function loadState(){
+  // Wait up to 4s for the ES module to expose window.loadStateFromFirebase
+  // (ES modules are async and may not be ready when this inline script runs)
+  let waited = 0;
+  while (!window.loadStateFromFirebase && waited < 4000) {
+    await new Promise(r => setTimeout(r, 100));
+    waited += 100;
+  }
+
   let loadedFromCloud = false;
   try {
     if(window.loadStateFromFirebase){
+      const msgEl = document.getElementById('loader-msg');
+      if (msgEl) msgEl.textContent = 'Loading data from cloud\u2026';
       const cloudData = await window.loadStateFromFirebase();
       if(cloudData && typeof cloudData === 'object'){
         state = {
@@ -1801,11 +1879,13 @@ async function loadState(){
         };
         loadedFromCloud = true;
         localStorage.setItem(LS_KEY, JSON.stringify(state));
-        console.log("☁️ Primary Cloud Firestore state loaded into application.");
+        console.log('☁️ Primary Cloud Firestore state loaded into application.');
       }
+    } else {
+      console.warn('⚠️ Firebase module not ready after 4s, using localStorage fallback.');
     }
   } catch (err) {
-    console.warn("⚠️ Cloud load error, falling back to localStorage:", err);
+    console.warn('⚠️ Cloud load error, falling back to localStorage:', err);
   }
 
   if(!loadedFromCloud){
@@ -1824,7 +1904,7 @@ async function loadState(){
         if(!state.tests && Array.isArray(parsed.tests)) state.tests = parsed.tests;
       }catch(e){ console.error('Error parsing stored data', e); }
     }
-    
+
     if(!state.master || !state.master.length){
       populateSampleDataIfEmpty();
     }
@@ -1844,7 +1924,6 @@ async function loadState(){
   });
   nextTrackingSeq = maxSeq+1;
 
-  // Seed default admin and operator users if empty
   if(!state.users || !state.users.length){
     state.users = [
       { username: 'admin', password: '123', role: 'admin' },
@@ -1853,7 +1932,6 @@ async function loadState(){
       { username: 'Sunil', password: '123', role: 'operator' }
     ];
   } else {
-    // Ensure default admin user always exists
     if(!state.users.some(u => u.username && u.username.toLowerCase() === 'admin')){
       state.users.unshift({ username: 'admin', password: '123', role: 'admin' });
     }
@@ -1865,6 +1943,9 @@ async function loadState(){
   currentUser = null;
   state.currentUser = null;
   applyRoleRestrictions();
+
+  // ✅ All done — hide the loading screen
+  hideLoader();
 }
 loadState();
 
