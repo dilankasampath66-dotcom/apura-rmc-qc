@@ -91,6 +91,7 @@ export class DatabaseManager {
           if (docSnap.exists) {
             const cloudData = docSnap.data();
             if (cloudData && typeof cloudData === 'object') {
+              // Preserve the current session's logged-in user — never overwrite it from cloud data.
               window.state = {
                 master: Array.isArray(cloudData.master) ? cloudData.master : [],
                 tests: Array.isArray(cloudData.tests) ? cloudData.tests : [],
@@ -99,7 +100,7 @@ export class DatabaseManager {
                 skippedTests: Array.isArray(cloudData.skippedTests) ? cloudData.skippedTests : [],
                 crmVisits: Array.isArray(cloudData.crmVisits) ? cloudData.crmVisits : [],
                 mixGrades: Array.isArray(cloudData.mixGrades) ? cloudData.mixGrades : [],
-                currentUser: window.currentUser
+                currentUser: window.currentUser  // Session-only: always use local value, never cloud
               };
 
               // Overwrite LocalStorage cache silently as secondary offline backup
@@ -282,10 +283,15 @@ export class DatabaseManager {
   async saveMainStateDoc() {
     if (!this.isFirebaseActive() || navigator.onLine === false) return;
     try {
-      const cleanState = JSON.parse(JSON.stringify(window.state));
+      // IMPORTANT: Never persist currentUser to the cloud — it is a session-only value.
+      // Saving it would cause login state to bleed across browsers.
+      const { currentUser, ...stateToSave } = window.state;
+      const cleanState = JSON.parse(JSON.stringify(stateToSave));
       await this.db.collection("apura_qc_system").doc("main_state").set(cleanState);
+      console.log("☁️ main_state document saved to Firestore successfully.");
     } catch (err) {
-      console.warn("⚠️ saveMainStateDoc notice:", err.message);
+      console.error("❌ saveMainStateDoc FAILED:", err.message, err.code);
+      window.toast?.(`⚠️ Cloud save failed: ${err.message}. Data may not sync to other browsers.`);
     }
   }
 
