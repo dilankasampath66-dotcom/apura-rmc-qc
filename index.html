@@ -1620,11 +1620,13 @@ async function loadState(){
           activities: Array.isArray(cloudData.activities) ? cloudData.activities : [],
           users: Array.isArray(cloudData.users) ? cloudData.users : [],
           skippedTests: Array.isArray(cloudData.skippedTests) ? cloudData.skippedTests : [],
+          crmVisits: Array.isArray(cloudData.crmVisits) ? cloudData.crmVisits : [],
+          mixGrades: Array.isArray(cloudData.mixGrades) ? cloudData.mixGrades : [],
           currentUser: null
         };
-        if(state.master.length || state.tests.length) {
-          loadedFromCloud = true;
-        }
+        loadedFromCloud = true;
+        localStorage.setItem(LS_KEY, JSON.stringify(state));
+        console.log("☁️ Primary Cloud Firestore state loaded into application.");
       }
     }
   } catch (err) {

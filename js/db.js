@@ -84,7 +84,7 @@ export class DatabaseManager {
   }
 
   /**
-   * Loads global application state from Cloud Firestore or Local Storage.
+   * Loads global application state from Cloud Firestore (primary) or Local Storage (offline fallback).
    */
   async loadState() {
     let loadedFromCloud = false;
@@ -105,14 +105,15 @@ export class DatabaseManager {
               mixGrades: Array.isArray(cloudData.mixGrades) ? cloudData.mixGrades : [],
               currentUser: null
             };
-            if (window.state.master.length || window.state.tests.length) {
-              loadedFromCloud = true;
-            }
+            loadedFromCloud = true;
+            // Primary cloud state synced into localStorage for offline cache
+            localStorage.setItem(LS_KEY, JSON.stringify(window.state));
+            console.log("☁️ Primary Cloud Firestore state loaded & synced across browsers.");
           }
         }
       }
     } catch (err) {
-      console.warn("⚠️ Firestore loadState failed, resorting to Local Storage:", err);
+      console.warn("⚠️ Firestore loadState error, falling back to Local Storage:", err);
     }
 
     if (!loadedFromCloud) {
