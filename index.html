@@ -2959,8 +2959,12 @@ function renderDashboardKPIs(filteredMaster, filteredTests) {
     return avg !== null ? { x: a.days, y: avg } : null;
   }).filter(Boolean);
 
+  const startVal = document.getElementById('dash-start') ? document.getElementById('dash-start').value : '';
+  const endVal = document.getElementById('dash-end') ? document.getElementById('dash-end').value : '';
+  const gradeVal = document.getElementById('dash-grade') ? document.getElementById('dash-grade').value : '';
+  const custVal = document.getElementById('dash-customer') ? document.getElementById('dash-customer').value : '';
+
   renderInterpretation(filteredMaster, matureRows, passCount, failCount, passPct, gradeVal, custVal, startVal, endVal, logPoints);
-  fetchAndRenderEngineeringCharts();
 }
 
 /* ---- Table A: Age-wise Strength Development ---- */
