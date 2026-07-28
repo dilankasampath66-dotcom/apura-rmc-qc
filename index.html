@@ -801,8 +801,11 @@ td.mono{ font-family: var(--font-mono); font-size:13px; }
 
         <!-- Username Field -->
         <div class="field" style="margin-bottom:14px;">
-          <label style="font-size:12px; font-weight:700; color:#475569; text-transform:uppercase; letter-spacing:0.5px;">Username</label>
-          <input type="text" id="login-username-input"
+          <label for="login-username-input" style="font-size:12px; font-weight:700; color:#475569; text-transform:uppercase; letter-spacing:0.5px;">Username</label>
+          <input type="text"
+            id="login-username-input"
+            name="username"
+            autocomplete="username"
             placeholder="Enter your username"
             onkeydown="if(event.key==='Enter') login()"
             style="border-radius:9px; border:1.5px solid #e2e8f0; padding:11px 14px; font-size:14px; transition:border-color 0.2s;"
@@ -811,8 +814,11 @@ td.mono{ font-family: var(--font-mono); font-size:13px; }
 
         <!-- Password Field -->
         <div class="field" style="margin-bottom:6px;">
-          <label style="font-size:12px; font-weight:700; color:#475569; text-transform:uppercase; letter-spacing:0.5px;">Password</label>
-          <input type="password" id="login-password-input"
+          <label for="login-password-input" style="font-size:12px; font-weight:700; color:#475569; text-transform:uppercase; letter-spacing:0.5px;">Password</label>
+          <input type="password"
+            id="login-password-input"
+            name="password"
+            autocomplete="current-password"
             placeholder="Enter your password"
             onkeydown="if(event.key==='Enter') login()"
             style="border-radius:9px; border:1.5px solid #e2e8f0; padding:11px 14px; font-size:14px; transition:border-color 0.2s;"
@@ -3268,7 +3274,7 @@ function saveTestResult(){
   });
 
   m.lastUpdated = new Date().toISOString();
-  const avgStr = sampleStrengths.reduce((s, v) => s + v, 0) / sampleStrengths.length;
+  // FIX: avgStr already declared above — reuse the existing variable (no re-declaration)
 
   logActivity(
     "Test Recorded",
@@ -5260,7 +5266,7 @@ document.getElementById('f-castingDate').valueAsDate = new Date();
     <!-- HEADER SECTION WITH LOGO & COMPANY INFO -->
     <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #000000; padding-bottom: 12px; margin-bottom: 16px;">
       <div style="width: 140px; flex-shrink: 0;">
-        <img id="pdf-report-logo" src="https://dilankasampath66-dotcom.github.io/apura-rmc-qc/images/logo.png" alt="Tokyo Supermix Logo" style="max-width: 130px; height: auto;" onerror="this.src='https://via.placeholder.com/150x50?text=TOKYO+SUPERMIX'" />
+        <img id="pdf-report-logo" src="https://dilankasampath66-dotcom.github.io/apura-rmc-qc/images/logo.png" alt="Tokyo Supermix Logo" style="max-width: 130px; height: auto;" onerror="this.onerror=null; this.style.display='none'; this.parentElement.innerHTML='<div style=\'font-family:monospace; font-size:13px; font-weight:800; color:#1e3a5f; letter-spacing:1px;\'>TOKYO SUPER MIX</div>'" />
       </div>
       <div style="text-align: right; flex: 1;">
         <h2 style="margin: 0; font-size: 17px; font-weight: 800; color: #000000; letter-spacing: 0.5px;">TOKYO SUPER MIX (PVT) LTD</h2>
