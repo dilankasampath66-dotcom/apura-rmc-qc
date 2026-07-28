@@ -919,6 +919,27 @@ td.mono{ font-family: var(--font-mono); font-size:13px; }
               <div id="tt-age-badges" style="display:flex; gap:8px; flex-wrap:wrap;"></div>
             </div>
 
+            <!-- Card: Associated Test Results History (Testing Entry) -->
+            <div class="card" id="testing-tests-card" style="margin-top:16px; margin-bottom:16px; display:none;">
+              <h3>Associated Test Results History</h3>
+              <div class="table-wrap">
+                <table id="testing-tests-table">
+                  <thead>
+                    <tr>
+                      <th>Test ID</th>
+                      <th>Testing Age</th>
+                      <th>Testing Date</th>
+                      <th>Tested By</th>
+                      <th style="text-align:right;">Weight (kg)</th>
+                      <th style="text-align:right;">Load (kN)</th>
+                      <th style="text-align:right;">Strength (N/mm²)</th>
+                    </tr>
+                  </thead>
+                  <tbody></tbody>
+                </table>
+              </div>
+            </div>
+
             <!-- Expanded Complete Batch Metadata Grid -->
             <div class="grid grid-4">
               <div class="field"><label>Tracking Number</label><div class="readonly-field" id="tt-tn"></div></div>
@@ -1486,7 +1507,10 @@ td.mono{ font-family: var(--font-mono); font-size:13px; }
     doc, 
     setDoc, 
     getDoc,
-    onSnapshot
+    onSnapshot,
+    collection,
+    addDoc,
+    serverTimestamp
   } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
   // Production Firebase Project Configuration for APURA RMC PLANT
@@ -1574,6 +1598,21 @@ td.mono{ font-family: var(--font-mono); font-size:13px; }
       console.warn("⚠️ Firestore cloud load failed, falling back to local storage:", err);
     }
     return null;
+  };
+
+  window.logWarningAlertToFirebase = async function(payload) {
+    if (!db || !firebaseActive) return;
+    try {
+      const auditPayload = {
+        ...payload,
+        timestamp: serverTimestamp()
+      };
+      const alertsRef = collection(db, "WarningAlerts");
+      await addDoc(alertsRef, auditPayload);
+      console.log("☁️ Audit log saved to Firebase WarningAlerts collection.");
+    } catch (err) {
+      console.warn("⚠️ Failed to log WarningAlert to Firebase:", err);
+    }
   };
 </script>
 
@@ -2603,6 +2642,32 @@ function deleteTestSample(testId, tn){
   );
 }
 
+function renderTestingTestsHistory(tn) {
+  const card = document.getElementById('testing-tests-card');
+  const tbody = document.querySelector('#testing-tests-table tbody');
+  if(!card || !tbody) return;
+
+  const tests = testsFor(tn);
+  card.style.display = 'block';
+
+  if(!tests.length){
+    tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state" style="padding:16px;"><div class="ic">&#9744;</div>No test results recorded for this casting yet.</div></td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = tests.map(t => `
+    <tr>
+      <td class="mono"><strong>${t.testId}</strong></td>
+      <td><span class="badge badge-blue">${t.testingAge}</span></td>
+      <td class="mono">${fmtDate(t.testingDate)}</td>
+      <td style="font-weight:600;color:var(--slate-deep);">${escapeHtml(t.testedBy)}</td>
+      <td style="text-align:right;" class="mono">${t.weight ? t.weight.toFixed(2) : '8.25'}</td>
+      <td style="text-align:right;" class="mono">${t.load.toFixed(2)}</td>
+      <td style="text-align:right;font-weight:700;" class="mono">${t.strength.toFixed(2)}</td>
+    </tr>
+  `).join('');
+}
+
 function jumpToRecall(tn){
   showView('recall');
   const input = document.getElementById('recall-search');
@@ -2816,6 +2881,7 @@ function recallForTesting(){
   forceUpdateRecordStatus(m.trackingNumber, existingTests, activeAges, m.grade);
   
   updateAgeReminderBanner(m);
+  renderTestingTestsHistory(m.trackingNumber);
   clearTestingForm();
 }
 
@@ -2913,11 +2979,47 @@ function saveTestResult(){
   }
 
   const age = detectAge(m.castingDate, date);
+  const newNumericAge = parseInt(age.match(/\d+/) || [0][0], 10);
+  
   let sampleStrengths = [];
+  sampleItems.forEach(item => {
+    sampleStrengths.push(Math.round((item.load / 22.5) * 100) / 100);
+  });
+  const avgStr = sampleStrengths.reduce((s, v) => s + v, 0) / sampleStrengths.length;
+
+  if (newNumericAge > 0) {
+    let maxPreviousStrength = -1;
+    let maxPreviousAge = '';
+    existing.forEach(t => {
+      const pastNumericAge = parseInt((t.testingAge || '').match(/\d+/) || [0][0], 10);
+      if (pastNumericAge > 0 && pastNumericAge < newNumericAge) {
+        if (t.strength > maxPreviousStrength) {
+          maxPreviousStrength = t.strength;
+          maxPreviousAge = t.testingAge;
+        }
+      }
+    });
+
+    if (maxPreviousStrength > 0 && avgStr < maxPreviousStrength) {
+      const confirmMsg = `ENGINEERING WARNING: The entered strength (${avgStr.toFixed(2)} N/mm²) is lower than a previously recorded early-age strength for this batch. Concrete strength must progress over time (28D > 14D > 7D > 3D). Are you sure you want to save this anomalous result?`;
+      if (!window.confirm(confirmMsg)) {
+        return;
+      }
+      
+      if (typeof window.logWarningAlertToFirebase === 'function') {
+        window.logWarningAlertToFirebase({
+          trackingNumber: m.trackingNumber,
+          alertType: "Strength Progression Anomaly",
+          message: `Technician ${testedBy} saved a ${age} test at ${avgStr.toFixed(2)} N/mm², which is lower than the previous ${maxPreviousAge} test of ${maxPreviousStrength.toFixed(2)} N/mm².`,
+          testedBy: testedBy,
+          status: "Unread"
+        });
+      }
+    }
+  }
 
   sampleItems.forEach((item, idx) => {
-    const strength = Math.round((item.load / 22.5) * 100) / 100;
-    sampleStrengths.push(strength);
+    const strength = sampleStrengths[idx];
     const testId = `${m.trackingNumber}-T${existing.length + idx + 1}`;
     state.tests.push({
       testId,
