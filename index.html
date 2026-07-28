@@ -1696,11 +1696,20 @@ td.mono{ font-family: var(--font-mono); font-size:13px; }
         if (snap.exists()) {
           const cloudData = snap.data();
           if (cloudData && typeof cloudData === 'object') {
+            let cloudUsers = Array.isArray(cloudData.users) ? cloudData.users : (window.state?.users || []);
+            
+            // Always ensure admin account exists in the user list
+            if(!cloudUsers.some(u => u.username && u.username.toLowerCase() === 'admin')){
+              cloudUsers.unshift({ username: 'admin', password: '123', role: 'admin', companyId: 'APURA_RMC' });
+            }
+            // Back-fill companyId for any legacy user records from cloud
+            cloudUsers.forEach(u => { if(!u.companyId) u.companyId = 'APURA_RMC'; });
+
             window.state = {
               master: Array.isArray(cloudData.master) ? cloudData.master : [],
               tests: Array.isArray(cloudData.tests) ? cloudData.tests : [],
               activities: Array.isArray(cloudData.activities) ? cloudData.activities : [],
-              users: Array.isArray(cloudData.users) ? cloudData.users : (window.state?.users || []),
+              users: cloudUsers,
               skippedTests: Array.isArray(cloudData.skippedTests) ? cloudData.skippedTests : [],
               crmVisits: Array.isArray(cloudData.crmVisits) ? cloudData.crmVisits : [],
               mixGrades: Array.isArray(cloudData.mixGrades) ? cloudData.mixGrades : [],
@@ -1830,12 +1839,9 @@ function login(){
   }
 
   // ── TASK 2: Session Initialization — store tenant data in sessionStorage ──
-  const companyId = found.companyId || 'APURA_RMC'; // fallback for legacy accounts
-  if(!companyId){
-    if(btn){ btn.disabled = false; btn.textContent = 'Sign In & Start Session'; }
-    _loginError(errEl, '✕ Account not assigned to a tenant. Contact your administrator.');
-    return;
-  }
+  // Ensure user has companyId (back-fill for legacy accounts)
+  if(!found.companyId) found.companyId = 'APURA_RMC';
+  const companyId = found.companyId;
 
   sessionStorage.setItem('companyId',  companyId);
   sessionStorage.setItem('userRole',   found.role || 'user');
@@ -2225,15 +2231,18 @@ async function loadState(){
 
   if(!state.users || !state.users.length){
     state.users = [
-      { username: 'admin', password: '123', role: 'admin' },
-      { username: 'Jagath', password: '123', role: 'operator' },
-      { username: 'Pushpe', password: '123', role: 'operator' },
-      { username: 'Sunil', password: '123', role: 'operator' }
+      { username: 'admin',  password: '123', role: 'admin',    companyId: 'APURA_RMC' },
+      { username: 'Jagath', password: '123', role: 'operator', companyId: 'APURA_RMC' },
+      { username: 'Pushpe', password: '123', role: 'operator', companyId: 'APURA_RMC' },
+      { username: 'Sunil',  password: '123', role: 'operator', companyId: 'APURA_RMC' }
     ];
   } else {
+    // Ensure admin account always exists
     if(!state.users.some(u => u.username && u.username.toLowerCase() === 'admin')){
-      state.users.unshift({ username: 'admin', password: '123', role: 'admin' });
+      state.users.unshift({ username: 'admin', password: '123', role: 'admin', companyId: 'APURA_RMC' });
     }
+    // Back-fill missing companyId on all legacy user records
+    state.users.forEach(u => { if(!u.companyId) u.companyId = 'APURA_RMC'; });
   }
 
   // STRICT RULE: DO NOT call saveState() here on page load!
