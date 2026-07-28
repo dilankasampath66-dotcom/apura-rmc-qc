@@ -1105,6 +1105,51 @@ td.mono{ font-family: var(--font-mono); font-size:13px; }
       <div class="card" style="margin-top:18px;">
         <h3>Engineering Interpretation (BS EN 12390)</h3>
         <p id="dash-interpretation" style="font-size:14px;color:var(--ink-soft);line-height:1.55;"></p>
+
+        <!-- STEP 1: HTML STRUCTURE FOR 5 ANALYTICAL CHARTS -->
+        <div class="engineering-charts-grid" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap:20px; margin-top:20px;">
+          
+          <!-- Chart 1: 7-Day vs 28-Day Strength Scatter -->
+          <div class="chart-card" style="background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-sm); padding:16px; box-shadow:var(--shadow);">
+            <h4 style="font-size:13.5px; color:var(--ink); margin:0 0 12px 0; font-weight:700;">1. 7-Day vs. 28-Day Strength Correlation</h4>
+            <div class="canvas-container" style="position:relative; height:260px; width:100%;">
+              <canvas id="chart-correlation"></canvas>
+            </div>
+          </div>
+
+          <!-- Chart 2: Weather Impact Bar Chart -->
+          <div class="chart-card" style="background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-sm); padding:16px; box-shadow:var(--shadow);">
+            <h4 style="font-size:13.5px; color:var(--ink); margin:0 0 12px 0; font-weight:700;">2. Weather Impact on 28-Day Strength</h4>
+            <div class="canvas-container" style="position:relative; height:260px; width:100%;">
+              <canvas id="chart-weather"></canvas>
+            </div>
+          </div>
+
+          <!-- Chart 3: Slump Line Chart -->
+          <div class="chart-card" style="background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-sm); padding:16px; box-shadow:var(--shadow);">
+            <h4 style="font-size:13.5px; color:var(--ink); margin:0 0 12px 0; font-weight:700;">3. Slump vs. 28-Day Strength (Efficiency)</h4>
+            <div class="canvas-container" style="position:relative; height:260px; width:100%;">
+              <canvas id="chart-slump"></canvas>
+            </div>
+          </div>
+
+          <!-- Chart 4: Compaction Density Line Chart -->
+          <div class="chart-card" style="background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-sm); padding:16px; box-shadow:var(--shadow);">
+            <h4 style="font-size:13.5px; color:var(--ink); margin:0 0 12px 0; font-weight:700;">4. Cube Density &amp; Compaction Consistency</h4>
+            <div class="canvas-container" style="position:relative; height:260px; width:100%;">
+              <canvas id="chart-density"></canvas>
+            </div>
+          </div>
+
+          <!-- Chart 5: Target Control Line Chart with Baseline -->
+          <div class="chart-card" style="background:var(--surface); border:1px solid var(--line); border-radius:var(--radius-sm); padding:16px; box-shadow:var(--shadow); grid-column: 1 / -1;">
+            <h4 style="font-size:13.5px; color:var(--ink); margin:0 0 12px 0; font-weight:700;">5. Target Strength Control &amp; Safety Margin (fck Baseline)</h4>
+            <div class="canvas-container" style="position:relative; height:280px; width:100%;">
+              <canvas id="chart-target-control"></canvas>
+            </div>
+          </div>
+
+        </div>
       </div>
     </section>
 
@@ -2915,6 +2960,7 @@ function renderDashboard(){
   }).filter(Boolean);
 
   renderInterpretation(filteredMaster, matureRows, passCount, failCount, passPct, gradeVal, custVal, startVal, endVal, logPoints);
+  fetchAndRenderEngineeringCharts();
 }
 
 /* ---- Table A: Age-wise Strength Development ---- */
@@ -3895,6 +3941,553 @@ function confirmClearWarnings(){
       toast("Warning Alerts log cleared.");
     }
   );
+}
+
+/* =========================================================================
+   STEP 2 & STEP 3: ENGINEERING INTERPRETATION ANALYTICAL CHARTS MODULE
+   BS EN 12390 Quality Control Analysis (Chart.js 4.x Compatible)
+   ========================================================================= */
+
+// Global registry for active chart instances (Lifecycle & Destroy control)
+const engineeringChartInstances = {};
+
+/**
+ * Destroys an existing Chart.js instance on a canvas if present.
+ * Prevents hover-flickering and canvas re-use errors.
+ * @param {string} canvasId - HTML element ID of the canvas
+ */
+function destroyEngineeringChart(canvasId) {
+  if (engineeringChartInstances[canvasId]) {
+    try {
+      engineeringChartInstances[canvasId].destroy();
+    } catch (err) {
+      console.warn(`[Chart Safeguard] Error destroying chart ${canvasId}:`, err);
+    }
+    delete engineeringChartInstances[canvasId];
+  }
+}
+
+/**
+ * Displays a graceful fallback placeholder within the canvas parent container
+ * when data is empty, null, or insufficient to render a chart.
+ * @param {string} canvasId - HTML element ID of the canvas
+ * @param {string} message - User-friendly message explaining data status
+ */
+function showChartPlaceholder(canvasId, message) {
+  destroyEngineeringChart(canvasId);
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const parent = canvas.parentElement;
+  if (!parent) return;
+
+  canvas.style.display = 'none';
+  let placeholder = parent.querySelector('.chart-placeholder');
+  if (!placeholder) {
+    placeholder = document.createElement('div');
+    placeholder.className = 'chart-placeholder';
+    placeholder.style.cssText = 'display:flex; align-items:center; justify-content:center; height:100%; width:100%; color:var(--ink-soft); font-size:13px; font-style:italic; background:var(--surface-sunk); border-radius:var(--radius-sm); padding:20px; text-align:center;';
+    parent.appendChild(placeholder);
+  }
+  placeholder.innerHTML = `⚠️ ${message}`;
+}
+
+/**
+ * Restores visibility of the canvas element and removes any active fallback placeholders.
+ * @param {string} canvasId - HTML element ID of the canvas
+ */
+function clearChartPlaceholder(canvasId) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  canvas.style.display = 'block';
+  const parent = canvas.parentElement;
+  if (!parent) return;
+  const placeholder = parent.querySelector('.chart-placeholder');
+  if (placeholder) placeholder.remove();
+}
+
+/**
+ * STEP 2: Asynchronous module to fetch records from Firebase or local state fallback,
+ * apply current dashboard filters, and process data for Chart.js rendering.
+ */
+async function fetchAndRenderEngineeringCharts() {
+  try {
+    let masterData = [];
+    let testData = [];
+
+    // Safe Firebase Fetching wrapped in try/catch block
+    if (window.loadStateFromFirebase && typeof window.loadStateFromFirebase === 'function') {
+      try {
+        const cloudData = await window.loadStateFromFirebase();
+        if (cloudData && typeof cloudData === 'object') {
+          masterData = Array.isArray(cloudData.master) ? cloudData.master : [];
+          testData = Array.isArray(cloudData.tests) ? cloudData.tests : [];
+        }
+      } catch (fbErr) {
+        console.warn("⚠️ Firebase cloud fetch error in engineering charts module:", fbErr);
+      }
+    }
+
+    // Local state fallback if cloud data empty or unavailable
+    if (!masterData.length && window.state && Array.isArray(window.state.master)) {
+      masterData = window.state.master;
+    }
+    if (!testData.length && window.state && Array.isArray(window.state.tests)) {
+      testData = window.state.tests;
+    }
+
+    // Extract current dashboard filter values
+    const gradeVal = document.getElementById('dash-filter-grade') ? document.getElementById('dash-filter-grade').value : '';
+    const custVal = document.getElementById('dash-filter-customer') ? document.getElementById('dash-filter-customer').value.trim().toLowerCase() : '';
+    const startVal = document.getElementById('dash-filter-start') ? document.getElementById('dash-filter-start').value : '';
+    const endVal = document.getElementById('dash-filter-end') ? document.getElementById('dash-filter-end').value : '';
+
+    // Apply dashboard filter criteria with safeguards
+    let filteredMaster = masterData || [];
+    if (gradeVal) filteredMaster = filteredMaster.filter(m => m && m.grade === gradeVal);
+    if (custVal) filteredMaster = filteredMaster.filter(m => m && (m.customer || '').toLowerCase().includes(custVal));
+    if (startVal) filteredMaster = filteredMaster.filter(m => m && m.castingDate >= startVal);
+    if (endVal) filteredMaster = filteredMaster.filter(m => m && m.castingDate <= endVal);
+
+    const filteredTNs = new Set(filteredMaster.map(m => m ? m.trackingNumber : null).filter(Boolean));
+    let filteredTests = (testData || []).filter(t => t && filteredTNs.has(t.trackingNumber));
+
+    // STEP 3: Execute individual chart processing and rendering modules
+    renderChartCorrelation(filteredMaster, filteredTests);
+    renderChartWeather(filteredMaster, filteredTests);
+    renderChartSlump(filteredMaster, filteredTests);
+    renderChartDensity(filteredMaster, filteredTests);
+    renderChartTargetControl(filteredMaster, filteredTests);
+
+  } catch (err) {
+    console.error("⚠️ Error executing fetchAndRenderEngineeringCharts:", err);
+  }
+}
+window.fetchAndRenderEngineeringCharts = fetchAndRenderEngineeringCharts;
+
+/**
+ * CHART 1: 7-Day vs. 28-Day Predictive Correlation (Scatter Plot)
+ * Matches 7-day and 28-day compressive strength readings for the same Tracking Number.
+ */
+function renderChartCorrelation(filteredMaster, filteredTests) {
+  const canvasId = 'chart-correlation';
+  try {
+    const tnMap = {};
+    (filteredTests || []).forEach(t => {
+      if (!t || !t.trackingNumber) return;
+      const tn = t.trackingNumber;
+      if (!tnMap[tn]) tnMap[tn] = { str7: [], str28: [] };
+      
+      // Strict numeric casting & validation
+      const str = parseFloat(t.strength);
+      if (isNaN(str) || str <= 0) return;
+
+      if (t.testingAge === '7 Days') tnMap[tn].str7.push(str);
+      if (t.testingAge === '28 Days') tnMap[tn].str28.push(str);
+    });
+
+    const scatterPoints = [];
+    Object.keys(tnMap).forEach(tn => {
+      const item = tnMap[tn];
+      if (item.str7.length > 0 && item.str28.length > 0) {
+        const avg7 = parseFloat((item.str7.reduce((a, b) => a + b, 0) / item.str7.length).toFixed(2));
+        const avg28 = parseFloat((item.str28.reduce((a, b) => a + b, 0) / item.str28.length).toFixed(2));
+        if (!isNaN(avg7) && !isNaN(avg28)) {
+          scatterPoints.push({ x: avg7, y: avg28, trackingNumber: tn });
+        }
+      }
+    });
+
+    if (scatterPoints.length === 0) {
+      showChartPlaceholder(canvasId, "Insufficient matched 7-Day & 28-Day test pairs available.");
+      return;
+    }
+
+    clearChartPlaceholder(canvasId);
+    destroyEngineeringChart(canvasId);
+
+    const ctx = document.getElementById(canvasId).getContext('2d');
+    engineeringChartInstances[canvasId] = new Chart(ctx, {
+      type: 'scatter',
+      data: {
+        datasets: [{
+          label: '7d vs 28d Strength',
+          data: scatterPoints,
+          backgroundColor: '#eb1c24',
+          borderColor: '#c9151c',
+          pointRadius: 6,
+          pointHoverRadius: 8
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => {
+                const pt = ctx.raw;
+                return ` ${pt.trackingNumber}: 7d=${pt.x} N/mm², 28d=${pt.y} N/mm²`;
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            title: { display: true, text: '7-Day Strength (N/mm²)', font: { size: 11, weight: 'bold' } }
+          },
+          y: {
+            title: { display: true, text: '28-Day Strength (N/mm²)', font: { size: 11, weight: 'bold' } }
+          }
+        }
+      }
+    });
+  } catch (err) {
+    console.error("Error rendering Chart 1 (Correlation):", err);
+    showChartPlaceholder(canvasId, "Unable to render 7d vs 28d Correlation Chart.");
+  }
+}
+
+/**
+ * CHART 2: Weather Impact Analysis (Bar Chart)
+ * Groups 28-day mature test results by casting weather (Sunny, Cloudy, Rainy, etc.).
+ */
+function renderChartWeather(filteredMaster, filteredTests) {
+  const canvasId = 'chart-weather';
+  try {
+    const masterWeatherMap = {};
+    (filteredMaster || []).forEach(m => {
+      if (m && m.trackingNumber) {
+        masterWeatherMap[m.trackingNumber] = (m.weather || 'Unspecified').trim();
+      }
+    });
+
+    const weatherGroups = {};
+    (filteredTests || []).forEach(t => {
+      if (!t || t.testingAge !== '28 Days') return;
+      const str = parseFloat(t.strength);
+      if (isNaN(str) || str <= 0) return;
+
+      const weather = masterWeatherMap[t.trackingNumber] || 'Unspecified';
+      if (!weatherGroups[weather]) weatherGroups[weather] = { sum: 0, count: 0 };
+      weatherGroups[weather].sum += str;
+      weatherGroups[weather].count += 1;
+    });
+
+    const categories = Object.keys(weatherGroups);
+    if (categories.length === 0) {
+      showChartPlaceholder(canvasId, "No 28-Day test data categorized by weather condition.");
+      return;
+    }
+
+    const labels = categories;
+    const dataValues = categories.map(c => parseFloat((weatherGroups[c].sum / weatherGroups[c].count).toFixed(2)));
+
+    clearChartPlaceholder(canvasId);
+    destroyEngineeringChart(canvasId);
+
+    const ctx = document.getElementById(canvasId).getContext('2d');
+    const bgColors = ['#f5b041', '#5d6d7e', '#2980b9', '#27ae60', '#8e44ad', '#eb1c24'];
+
+    engineeringChartInstances[canvasId] = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'Avg 28-Day Strength (N/mm²)',
+          data: dataValues,
+          backgroundColor: labels.map((_, i) => bgColors[i % bgColors.length]),
+          borderRadius: 6
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { title: { display: true, text: 'Casting Weather Condition', font: { size: 11, weight: 'bold' } } },
+          y: { title: { display: true, text: 'Avg 28-Day Strength (N/mm²)', font: { size: 11, weight: 'bold' } }, beginAtZero: true }
+        }
+      }
+    });
+  } catch (err) {
+    console.error("Error rendering Chart 2 (Weather Impact):", err);
+    showChartPlaceholder(canvasId, "Unable to render Weather Impact Chart.");
+  }
+}
+
+/**
+ * CHART 3: Slump & Cement Efficiency (Line Chart)
+ * Tracks ascending Slump (mm) workability vs. 28-Day Strength for a target concrete Grade.
+ */
+function renderChartSlump(filteredMaster, filteredTests) {
+  const canvasId = 'chart-slump';
+  try {
+    const gradeCounts = {};
+    (filteredMaster || []).forEach(m => {
+      if (m && m.grade) gradeCounts[m.grade] = (gradeCounts[m.grade] || 0) + 1;
+    });
+    const sortedGrades = Object.entries(gradeCounts).sort((a, b) => b[1] - a[1]);
+    const targetGrade = sortedGrades.length ? sortedGrades[0][0] : 'C25';
+
+    const tnSlumpMap = {};
+    (filteredMaster || []).forEach(m => {
+      if (!m || m.grade !== targetGrade) return;
+      const slumpVal = parseFloat(m.slump);
+      if (!isNaN(slumpVal) && slumpVal > 0) {
+        tnSlumpMap[m.trackingNumber] = slumpVal;
+      }
+    });
+
+    const slumpGroups = {};
+    (filteredTests || []).forEach(t => {
+      if (!t || t.testingAge !== '28 Days') return;
+      const slump = tnSlumpMap[t.trackingNumber];
+      if (slump === undefined) return;
+      const str = parseFloat(t.strength);
+      if (isNaN(str) || str <= 0) return;
+
+      if (!slumpGroups[slump]) slumpGroups[slump] = { sum: 0, count: 0 };
+      slumpGroups[slump].sum += str;
+      slumpGroups[slump].count += 1;
+    });
+
+    const sortedSlumps = Object.keys(slumpGroups).map(Number).sort((a, b) => a - b);
+
+    if (sortedSlumps.length === 0) {
+      showChartPlaceholder(canvasId, `Insufficient slump test data for grade ${targetGrade}.`);
+      return;
+    }
+
+    const labels = sortedSlumps.map(s => `${s} mm`);
+    const dataValues = sortedSlumps.map(s => parseFloat((slumpGroups[s].sum / slumpGroups[s].count).toFixed(2)));
+
+    clearChartPlaceholder(canvasId);
+    destroyEngineeringChart(canvasId);
+
+    const ctx = document.getElementById(canvasId).getContext('2d');
+    engineeringChartInstances[canvasId] = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: `Avg 28d Strength — Grade ${targetGrade} (N/mm²)`,
+          data: dataValues,
+          borderColor: '#1668b3',
+          backgroundColor: 'rgba(22, 104, 179, 0.1)',
+          fill: true,
+          tension: 0.3,
+          pointRadius: 5,
+          pointHoverRadius: 7
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: { title: { display: true, text: `Slump Workability (mm) — Target Grade ${targetGrade}`, font: { size: 11, weight: 'bold' } } },
+          y: { title: { display: true, text: 'Avg 28-Day Strength (N/mm²)', font: { size: 11, weight: 'bold' } } }
+        }
+      }
+    });
+  } catch (err) {
+    console.error("Error rendering Chart 3 (Slump Efficiency):", err);
+    showChartPlaceholder(canvasId, "Unable to render Slump & Efficiency Chart.");
+  }
+}
+
+/**
+ * CHART 4: Compaction & Lab Tech Consistency (Line Chart)
+ * Calculates cube density (kg/m³) = Weight (kg) / 0.003375 m³ chronologically to detect poor compaction.
+ */
+function renderChartDensity(filteredMaster, filteredTests) {
+  const canvasId = 'chart-density';
+  try {
+    const CUBE_VOLUME_M3 = 0.003375; // Standard 150mm cube volume
+
+    const validTests = [];
+    (filteredTests || []).forEach(t => {
+      if (!t) return;
+      const wt = parseFloat(t.weight);
+      if (isNaN(wt) || wt <= 0) return;
+      
+      const density = parseFloat((wt / CUBE_VOLUME_M3).toFixed(1));
+      if (isNaN(density) || density < 1500 || density > 3000) return; // Safeguard outliers
+
+      const dateStr = t.testingDate || '';
+      validTests.push({
+        date: dateStr,
+        testId: t.testId || t.trackingNumber || 'Test',
+        density: density,
+        tech: t.testedBy || 'Tech'
+      });
+    });
+
+    validTests.sort((a, b) => new Date(a.date) - new Date(b.date));
+    const recentTests = validTests.slice(-30);
+
+    if (recentTests.length === 0) {
+      showChartPlaceholder(canvasId, "Insufficient cube weight data to compute compaction density.");
+      return;
+    }
+
+    const labels = recentTests.map(t => t.testId);
+    const densityValues = recentTests.map(t => t.density);
+
+    clearChartPlaceholder(canvasId);
+    destroyEngineeringChart(canvasId);
+
+    const ctx = document.getElementById(canvasId).getContext('2d');
+    engineeringChartInstances[canvasId] = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: 'Cube Density (kg/m³)',
+            data: densityValues,
+            borderColor: '#2e7d5b',
+            backgroundColor: 'rgba(46, 125, 91, 0.08)',
+            fill: true,
+            tension: 0.2,
+            pointRadius: 4,
+            pointHoverRadius: 6
+          },
+          {
+            label: 'Min Compaction Threshold (2300 kg/m³)',
+            data: Array(recentTests.length).fill(2300),
+            borderColor: '#eb1c24',
+            borderDash: [6, 4],
+            pointRadius: 0,
+            fill: false
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          tooltip: {
+            callbacks: {
+              label: (ctx) => {
+                const idx = ctx.dataIndex;
+                const item = recentTests[idx];
+                if (ctx.datasetIndex === 0 && item) {
+                  return ` ${item.testId} (${item.tech}): ${item.density} kg/m³`;
+                }
+                return ` Threshold: 2300 kg/m³`;
+              }
+            }
+          }
+        },
+        scales: {
+          x: { title: { display: true, text: 'Chronological Test Order', font: { size: 11, weight: 'bold' } } },
+          y: { title: { display: true, text: 'Density (kg/m³)', font: { size: 11, weight: 'bold' } }, min: 2100, max: 2600 }
+        }
+      }
+    });
+  } catch (err) {
+    console.error("Error rendering Chart 4 (Density):", err);
+    showChartPlaceholder(canvasId, "Unable to render Compaction Density Chart.");
+  }
+}
+
+/**
+ * CHART 5: Target Strength Control (Line Chart with Baseline)
+ * Plots chronological 28-day strengths against Characteristic Target Strength fck baseline.
+ */
+function renderChartTargetControl(filteredMaster, filteredTests) {
+  const canvasId = 'chart-target-control';
+  try {
+    const matureTests = [];
+    (filteredTests || []).forEach(t => {
+      if (!t || t.testingAge !== '28 Days') return;
+      const str = parseFloat(t.strength);
+      if (isNaN(str) || str <= 0) return;
+
+      const grade = t.grade || 'C25';
+      const fck = window.gradeTarget ? (window.gradeTarget(grade) || parseFloat(grade.replace(/\D/g, '')) || 25) : 25;
+
+      matureTests.push({
+        date: t.testingDate || '',
+        testId: t.testId || t.trackingNumber,
+        strength: str,
+        grade: grade,
+        fck: fck
+      });
+    });
+
+    matureTests.sort((a, b) => new Date(a.date) - new Date(b.date));
+    const recentMature = matureTests.slice(-30);
+
+    if (recentMature.length === 0) {
+      showChartPlaceholder(canvasId, "No 28-day mature test results available for Target Control analysis.");
+      return;
+    }
+
+    const labels = recentMature.map(t => `${t.testId} (${t.grade})`);
+    const actualStrengths = recentMature.map(t => t.strength);
+    const targetBaselines = recentMature.map(t => t.fck);
+
+    clearChartPlaceholder(canvasId);
+    destroyEngineeringChart(canvasId);
+
+    const ctx = document.getElementById(canvasId).getContext('2d');
+    engineeringChartInstances[canvasId] = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: 'Actual 28d Strength (N/mm²)',
+            data: actualStrengths,
+            borderColor: '#1e7e34',
+            backgroundColor: 'rgba(30, 126, 52, 0.1)',
+            fill: true,
+            tension: 0.2,
+            pointRadius: 5,
+            pointHoverRadius: 7
+          },
+          {
+            label: 'Target Characteristic Strength fck (Baseline)',
+            data: targetBaselines,
+            borderColor: '#eb1c24',
+            borderWidth: 2,
+            borderDash: [5, 5],
+            pointRadius: 0,
+            fill: false
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          tooltip: {
+            callbacks: {
+              label: (ctx) => {
+                const idx = ctx.dataIndex;
+                const item = recentMature[idx];
+                if (ctx.datasetIndex === 0 && item) {
+                  const margin = (item.strength - item.fck).toFixed(2);
+                  const prefix = margin >= 0 ? '+' : '';
+                  return ` Actual: ${item.strength} N/mm² (Safety Margin: ${prefix}${margin} N/mm²)`;
+                }
+                return ` Target fck (${item.grade}): ${item.fck} N/mm²`;
+              }
+            }
+          }
+        },
+        scales: {
+          x: { title: { display: true, text: '28-Day Tests (Chronological Order)', font: { size: 11, weight: 'bold' } } },
+          y: { title: { display: true, text: 'Compressive Strength (N/mm²)', font: { size: 11, weight: 'bold' } }, beginAtZero: false }
+        }
+      }
+    });
+  } catch (err) {
+    console.error("Error rendering Chart 5 (Target Control):", err);
+    showChartPlaceholder(canvasId, "Unable to render Target Control Chart.");
+  }
 }
 
 /* ---------------------- INIT ---------------------- */
