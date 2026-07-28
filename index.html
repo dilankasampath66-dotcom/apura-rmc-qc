@@ -2973,15 +2973,15 @@ function renderHome(){
 
   const recent = [...state.master].sort((a,b)=>new Date(b.dateCreated)-new Date(a.dateCreated));
   document.getElementById('home-recent').innerHTML = recent.length ? `
-    <table><thead><tr><th>Tracking No.</th><th>Site</th><th>Grade</th><th>Cast Date</th></tr></thead>
-    <tbody>${recent.map(m=>`<tr><td><a href="#" onclick="jumpToRecall('${m.trackingNumber}'); return false;" class="tn-link">${m.trackingNumber}</a></td><td>${escapeHtml(m.site)}</td><td>${escapeHtml(m.grade)}</td><td>${fmtDate(m.castingDate)}</td></tr>`).join('')}</tbody></table>
+    <table><thead><tr><th>Tracking No.</th><th>Customer</th><th>Grade</th><th>Cast Date</th></tr></thead>
+    <tbody>${recent.map(m=>`<tr><td><a href="#" onclick="jumpToRecall('${m.trackingNumber}'); return false;" class="tn-link">${m.trackingNumber}</a></td><td>${escapeHtml(m.customer || '—')}</td><td>${escapeHtml(m.grade)}</td><td>${fmtDate(m.castingDate)}</td></tr>`).join('')}</tbody></table>
   ` : `<div class="empty-state"><div class="ic">&#9744;</div>No castings recorded yet.</div>`;
 
   const dueSoon = sched.filter(s=>s.status!=='Completed' && s.status!=='Skipped' && s.daysRemaining<=7 && s.daysRemaining>=-90)
                         .sort((a,b)=>a.daysRemaining-b.daysRemaining);
   document.getElementById('home-due').innerHTML = dueSoon.length ? `
-    <table><thead><tr><th>Tracking No.</th><th>Age</th><th>Due Date</th><th>Status</th></tr></thead>
-    <tbody>${dueSoon.map(s=>`<tr><td><a href="#" onclick="jumpToRecall('${s.trackingNumber}'); return false;" class="tn-link">${s.trackingNumber}</a></td><td>${s.age}</td><td>${fmtDate(s.dueDate)}</td><td>${statusBadge(s.status)}</td></tr>`).join('')}</tbody></table>
+    <table><thead><tr><th>Tracking No.</th><th>Age</th><th>Due Date</th><th>Status</th><th>Action</th></tr></thead>
+    <tbody>${dueSoon.map(s=>`<tr><td><a href="#" onclick="jumpToRecall('${s.trackingNumber}'); return false;" class="tn-link">${s.trackingNumber}</a></td><td>${s.age}</td><td>${fmtDate(s.dueDate)}</td><td>${statusBadge(s.status)}</td><td><button class="btn btn-sm btn-primary" onclick="jumpToTesting('${s.trackingNumber}')">Test</button></td></tr>`).join('')}</tbody></table>
   ` : `<div class="empty-state"><div class="ic">&#10003;</div>No tests due this week.</div>`;
 }
 
