@@ -2,19 +2,8 @@
 /* =========================================================================
    TOKYO SUPERMIX / APURA RMC PLANT — SALES & QC MANAGEMENT SYSTEM
    DatabaseManager Class & Firebase Firestore Database Communication Module
+   (Uses Firebase Compat SDK for Seamless Direct Browser Communication)
    ========================================================================= */
-
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-import { 
-  getFirestore, 
-  doc, 
-  setDoc, 
-  getDoc, 
-  collection, 
-  writeBatch,
-  updateDoc, 
-  deleteDoc 
-} from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
 const LS_KEY = 'apura_rmc_qc_data_v1';
 
@@ -36,18 +25,22 @@ export class DatabaseManager {
   }
 
   /**
-   * Initializes Firebase App & Cloud Firestore Service
+   * Initializes Firebase App & Cloud Firestore Service using Compat API
    */
   initFirebase() {
     try {
-      if (firebaseConfig.apiKey) {
-        const app = initializeApp(firebaseConfig);
-        this.db = getFirestore(app);
+      if (typeof firebase !== 'undefined' && firebase.initializeApp) {
+        if (!firebase.apps.length) {
+          firebase.initializeApp(firebaseConfig);
+        }
+        this.db = firebase.firestore();
         this.firebaseActive = true;
-        console.log("🔥 Firebase Cloud Firestore DatabaseManager initialized successfully.");
+        console.log("🔥 Firebase Firestore DatabaseManager connected via Compat CDN API.");
+      } else {
+        console.warn("⚠️ Firebase Compat SDK not available globally on window.");
       }
     } catch (err) {
-      console.warn("⚠️ Firebase Cloud Firestore initialization failed. Local Storage fallback active:", err);
+      console.warn("⚠️ Firebase initialization error. Falling back to LocalStorage:", err);
     }
   }
 
@@ -56,7 +49,7 @@ export class DatabaseManager {
   }
 
   /**
-   * Saves global application state to Local Storage and Cloud Firestore.
+   * Saves global application state to Local Storage and Cloud Firestore document.
    * @param {Object} stateData - Unified state object
    */
   async saveState(stateData) {
@@ -65,8 +58,7 @@ export class DatabaseManager {
       localStorage.setItem(LS_KEY, JSON.stringify(targetState));
       if (this.isFirebaseActive()) {
         const cleanState = JSON.parse(JSON.stringify(targetState));
-        const docRef = doc(this.db, "apura_qc_system", "main_state");
-        await setDoc(docRef, cleanState);
+        await this.db.collection("apura_qc_system").doc("main_state").set(cleanState);
         console.log("☁️ State synced to Cloud Firestore (apura_qc_system/main_state).");
       }
       return true;
@@ -83,9 +75,9 @@ export class DatabaseManager {
     let loadedFromCloud = false;
     try {
       if (this.isFirebaseActive()) {
-        const docRef = doc(this.db, "apura_qc_system", "main_state");
-        const snap = await getDoc(docRef);
-        if (snap.exists()) {
+        const docRef = this.db.collection("apura_qc_system").doc("main_state");
+        const snap = await docRef.get();
+        if (snap.exists) {
           const cloudData = snap.data();
           if (cloudData && typeof cloudData === 'object') {
             window.state = {
@@ -208,23 +200,23 @@ export class DatabaseManager {
 
           // 2. Batch Sync to Cloud Firestore Collections
           if (this.isFirebaseActive()) {
-            const batch = writeBatch(this.db);
+            const batch = this.db.batch();
             
             // Sync Master Casting Records
             for (const m of window.state.master) {
-              const ref = doc(this.db, "casting_records", m.trackingNumber);
+              const ref = this.db.collection("casting_records").doc(m.trackingNumber);
               batch.set(ref, JSON.parse(JSON.stringify(m)));
             }
 
             // Sync Cube Test Results
             for (const t of window.state.tests) {
-              const ref = doc(this.db, "cube_tests", t.testId);
+              const ref = this.db.collection("cube_tests").doc(t.testId);
               batch.set(ref, JSON.parse(JSON.stringify(t)));
             }
 
             // Sync CRM Site Visits
             for (const v of window.state.crmVisits) {
-              const ref = doc(this.db, "crm_site_visits", v.visitId || `CRM-${Date.now()}`);
+              const ref = this.db.collection("crm_site_visits").doc(v.visitId || `CRM-${Date.now()}`);
               batch.set(ref, JSON.parse(JSON.stringify(v)));
             }
 
@@ -277,8 +269,7 @@ export class DatabaseManager {
   async addCastingRecord(record) {
     if (!this.isFirebaseActive()) return false;
     try {
-      const docRef = doc(this.db, "casting_records", record.trackingNumber);
-      await setDoc(docRef, JSON.parse(JSON.stringify(record)));
+      await this.db.collection("casting_records").doc(record.trackingNumber).set(JSON.parse(JSON.stringify(record)));
       return true;
     } catch (err) {
       console.error("⚠️ addCastingRecord error:", err);
@@ -289,8 +280,7 @@ export class DatabaseManager {
   async addCubeTestResult(testData) {
     if (!this.isFirebaseActive()) return false;
     try {
-      const docRef = doc(this.db, "cube_tests", testData.testId);
-      await setDoc(docRef, JSON.parse(JSON.stringify(testData)));
+      await this.db.collection("cube_tests").doc(testData.testId).set(JSON.parse(JSON.stringify(testData)));
       return true;
     } catch (err) {
       console.error("⚠️ addCubeTestResult error:", err);
@@ -301,8 +291,7 @@ export class DatabaseManager {
   async addCRMSiteVisit(visitData) {
     if (!this.isFirebaseActive()) return false;
     try {
-      const docRef = doc(this.db, "crm_site_visits", visitData.visitId || `CRM-${Date.now()}`);
-      await setDoc(docRef, JSON.parse(JSON.stringify(visitData)));
+      await this.db.collection("crm_site_visits").doc(visitData.visitId || `CRM-${Date.now()}`).set(JSON.parse(JSON.stringify(visitData)));
       return true;
     } catch (err) {
       console.error("⚠️ addCRMSiteVisit error:", err);
