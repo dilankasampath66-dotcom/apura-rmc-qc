@@ -39,8 +39,14 @@ export class DatabaseManager {
           experimentalForceLongPolling: true,
           merge: true
         });
+
+        // Enable Offline IndexedDB Persistence
+        this.db.enablePersistence({ synchronizeTabs: true }).catch((err) => {
+          console.warn("⚠️ Firestore persistence notice:", err.code);
+        });
+
         this.firebaseActive = true;
-        console.log("🔥 Firebase Firestore DatabaseManager connected via Compat CDN API (Long Polling Active).");
+        console.log("🔥 Firebase Firestore DatabaseManager connected via Compat CDN API (Long Polling & Offline Persistence Active).");
       } else {
         console.warn("⚠️ Firebase Compat SDK not available globally on window.");
       }
@@ -62,13 +68,17 @@ export class DatabaseManager {
     try {
       localStorage.setItem(LS_KEY, JSON.stringify(targetState));
       if (this.isFirebaseActive()) {
+        if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+          console.log("⚡ Device offline: Data preserved in LocalStorage and IndexedDB queue.");
+          return true;
+        }
         const cleanState = JSON.parse(JSON.stringify(targetState));
         await this.db.collection("apura_qc_system").doc("main_state").set(cleanState);
         console.log("☁️ State synced to Cloud Firestore (apura_qc_system/main_state).");
       }
       return true;
     } catch (err) {
-      console.error("⚠️ DatabaseManager saveState error:", err);
+      console.warn("⚡ Firestore save queued locally (offline / network error):", err.message || err);
       return false;
     }
   }

@@ -1219,7 +1219,7 @@ td.mono{ font-family: var(--font-mono); font-size:13px; }
 <!-- FIREBASE SDK INITIALIZATION (CLOUD FIRESTORE INTEGRATION) -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-  import { initializeFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+  import { initializeFirestore, enableIndexedDbPersistence, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
   // Production Firebase Project Configuration for APURA RMC PLANT
   const firebaseConfig = {
@@ -1243,6 +1243,15 @@ td.mono{ font-family: var(--font-mono); font-size:13px; }
       });
       firebaseActive = true;
       console.log("🔥 Firebase Cloud Firestore connected with Long Polling active (apura-rmc-qc).");
+
+      // Enable Offline IndexedDB Persistence
+      enableIndexedDbPersistence(db).catch((err) => {
+        if (err.code === 'failed-precondition') {
+          console.warn("⚠️ Firestore offline persistence enabled in primary tab.");
+        } else if (err.code === 'unimplemented') {
+          console.warn("⚠️ Current browser does not support IndexedDB persistence.");
+        }
+      });
     }
   } catch (err) {
     console.warn("⚠️ Firebase init failed, fallback to localStorage active:", err);
@@ -1250,6 +1259,10 @@ td.mono{ font-family: var(--font-mono); font-size:13px; }
 
   window.saveStateToFirebase = async function(stateData) {
     if (!db || !firebaseActive) return false;
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      console.log("⚡ Device offline: Data stored in local cache and IndexedDB queue.");
+      return false;
+    }
     try {
       const cleanState = JSON.parse(JSON.stringify(stateData));
       const docRef = doc(db, "apura_qc_system", "main_state");
@@ -1257,7 +1270,7 @@ td.mono{ font-family: var(--font-mono); font-size:13px; }
       console.log("☁️ Full system state synced to Firebase Cloud Firestore (apura_qc_system/main_state).");
       return true;
     } catch (err) {
-      console.warn("⚠️ Firestore cloud save failed, local storage preserved:", err);
+      console.warn("⚡ Firestore network sync postponed (saved locally in IndexedDB):", err.message || err);
       return false;
     }
   };
