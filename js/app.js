@@ -6,7 +6,7 @@
 
 import { dbManager } from "./db.js";
 import { calculateConcreteQuotation } from "./pricingEngine.js";
-import { validateStageTransition, computeTestingSchedule } from "./rulesEngine.js";
+import { validateStageTransition, computeTestingSchedule, evaluateTestingStatus } from "./rulesEngine.js";
 import { generateAIExecutiveInsights } from "./aiEngine.js";
 import { validateEntryIntegrity } from "./selfImprovement.js";
 import { runQAAutoTests } from "./autoQA.js";
