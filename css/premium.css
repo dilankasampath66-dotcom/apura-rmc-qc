@@ -1,0 +1,81 @@
+/* =========================================================================
+   PREMIUM "NANO" GLOBAL AESTHETIC & SCROLL REVEAL
+   ========================================================================= */
+
+:root {
+    /* Background & Overlay */
+    --body-bg-image: url('https://images.unsplash.com/photo-1518640467707-6811f4a6ab73?q=80&w=2000&auto=format&fit=crop');
+    --bg-overlay-color: rgba(245, 247, 250, 0.95);
+
+    /* Container Styles */
+    --premium-bg: #ffffff;
+    --premium-radius: 12px;
+    --premium-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+    --premium-shadow-hover: 0 10px 30px rgba(0, 0, 0, 0.08);
+
+    /* Animation Timing */
+    --transition-smooth: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    --reveal-duration: 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* --- 1. THE GLOBAL BACKGROUND (Body Styling) --- */
+body {
+    background-image: 
+        linear-gradient(var(--bg-overlay-color), var(--bg-overlay-color)),
+        var(--body-bg-image);
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+    background-repeat: no-repeat;
+}
+
+/* --- 2. DASHBOARD CONTAINERS (Foreground Readability) --- */
+/* Target all primary containers. Add your specific container classes here if needed */
+.card,
+.panel,
+.dashboard-container,
+.glass-card,
+.kanban-col,
+.table-wrap,
+.white-box {
+    background-color: var(--premium-bg) !important;
+    border-radius: var(--premium-radius) !important;
+    box-shadow: var(--premium-shadow) !important;
+    border: 1px solid rgba(226, 232, 240, 0.6) !important;
+    
+    /* Prepare for micro-interactions */
+    transition: var(--transition-smooth);
+}
+
+/* --- 3. MICRO-INTERACTIONS (Hover Effects) --- */
+/* Subtle lift and deeper shadow on hover */
+.card:hover,
+.panel:hover,
+.glass-card:hover,
+.dashboard-container:hover,
+.white-box:hover,
+tbody tr:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--premium-shadow-hover) !important;
+    z-index: 10;
+}
+
+/* Smooth transition for table rows specifically */
+tbody tr {
+    transition: var(--transition-smooth);
+}
+
+/* --- 4. THE "EXPENSIVE" MOTION (Scroll Reveal Transitions) --- */
+/* Pre-state: elements are slightly shifted down and invisible */
+.reveal-on-scroll {
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity var(--reveal-duration), transform var(--reveal-duration);
+    will-change: opacity, transform;
+}
+
+/* Post-state: applied by the Intersection Observer JS */
+.reveal-on-scroll.is-revealed {
+    opacity: 1;
+    transform: translateY(0);
+}
