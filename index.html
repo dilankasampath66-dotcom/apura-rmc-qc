@@ -1512,6 +1512,7 @@ td.mono{ font-family: var(--font-mono); font-size:13px; }
     addDoc,
     serverTimestamp
   } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+  import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-functions.js";
 
   // Production Firebase Project Configuration for APURA RMC PLANT
   const firebaseConfig = {
@@ -1538,6 +1539,11 @@ td.mono{ font-family: var(--font-mono); font-size:13px; }
       });
       firebaseActive = true;
       console.log("🔥 Firebase Cloud Firestore connected with Real-Time Listeners (onSnapshot) active.");
+
+      // Expose Firebase Functions to global scope for Cloud Function calls
+      window.appFunctions = getFunctions(app, "us-central1");
+      window.httpsCallable = httpsCallable;
+      console.log("⚡ Firebase Functions initialized (region: us-central1).");
 
       // Attach Real-Time Snapshot Listener for multi-browser sync
       const docRef = doc(db, "apura_qc_system", "main_state");
@@ -5171,5 +5177,6 @@ document.getElementById('f-castingDate').valueAsDate = new Date();
 </script>
 
 <script src="js/migration.js"></script>
+<script src="js/userManagement.js"></script>
 </body>
 </html>
