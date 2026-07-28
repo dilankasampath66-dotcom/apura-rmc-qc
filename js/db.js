@@ -2,7 +2,7 @@
 /* =========================================================================
    TOKYO SUPERMIX / APURA RMC PLANT — SALES & QC MANAGEMENT SYSTEM
    DatabaseManager Class & Firebase Firestore Database Communication Module
-   (Uses Firebase Compat SDK for Seamless Direct Browser Communication)
+   (Strict Top-Down Cloud -> Local Initialization Architecture)
    ========================================================================= */
 
 const LS_KEY = 'apura_rmc_qc_data_v1';
@@ -46,7 +46,7 @@ export class DatabaseManager {
         });
 
         this.firebaseActive = true;
-        console.log("🔥 Firebase Firestore DatabaseManager connected via Compat CDN API (Long Polling & Offline Persistence Active).");
+        console.log("🔥 Firebase Firestore DatabaseManager connected via Compat CDN API.");
       } else {
         console.warn("⚠️ Firebase Compat SDK not available globally on window.");
       }
@@ -60,7 +60,44 @@ export class DatabaseManager {
   }
 
   /**
+   * Single Source of Truth on Startup: Fetches live data directly FROM Firebase Cloud Firestore.
+   * If data exists in Firebase, populates window.state and caches to LocalStorage.
+   * STRICT RULE: NEVER pushes or syncs LocalStorage data to Firebase during initialization.
+   */
+  async loadFromFirebase() {
+    if (!this.isFirebaseActive()) return false;
+    try {
+      const docRef = this.db.collection("apura_qc_system").doc("main_state");
+      const snap = await docRef.get();
+      if (snap.exists) {
+        const cloudData = snap.data();
+        if (cloudData && typeof cloudData === 'object') {
+          window.state = {
+            master: Array.isArray(cloudData.master) ? cloudData.master : [],
+            tests: Array.isArray(cloudData.tests) ? cloudData.tests : [],
+            activities: Array.isArray(cloudData.activities) ? cloudData.activities : [],
+            users: Array.isArray(cloudData.users) ? cloudData.users : [],
+            skippedTests: Array.isArray(cloudData.skippedTests) ? cloudData.skippedTests : [],
+            crmVisits: Array.isArray(cloudData.crmVisits) ? cloudData.crmVisits : [],
+            mixGrades: Array.isArray(cloudData.mixGrades) ? cloudData.mixGrades : [],
+            currentUser: null
+          };
+
+          // Cache cloud state to LocalStorage for offline backup (WITHOUT pushing to Firebase)
+          localStorage.setItem(LS_KEY, JSON.stringify(window.state));
+          console.log("☁️ Primary Cloud Firestore state loaded as Single Source of Truth on startup.");
+          return true;
+        }
+      }
+    } catch (err) {
+      console.warn("⚠️ loadFromFirebase error, falling back to Local Storage:", err);
+    }
+    return false;
+  }
+
+  /**
    * Saves global application state to Local Storage and Cloud Firestore document.
+   * STRICT RULE: Called ONLY when user explicitly performs an action (form submission, JSON restore, etc.).
    * @param {Object} stateData - Unified state object
    */
   async saveState(stateData) {
@@ -84,38 +121,14 @@ export class DatabaseManager {
   }
 
   /**
-   * Loads global application state from Cloud Firestore (primary) or Local Storage (offline fallback).
+   * Top-Down Initialization Logic: Loads state FROM Cloud Firestore first on app load.
+   * DOES NOT push LocalStorage or seed data to Firebase on page load.
    */
   async loadState() {
-    let loadedFromCloud = false;
-    try {
-      if (this.isFirebaseActive()) {
-        const docRef = this.db.collection("apura_qc_system").doc("main_state");
-        const snap = await docRef.get();
-        if (snap.exists) {
-          const cloudData = snap.data();
-          if (cloudData && typeof cloudData === 'object') {
-            window.state = {
-              master: Array.isArray(cloudData.master) ? cloudData.master : [],
-              tests: Array.isArray(cloudData.tests) ? cloudData.tests : [],
-              activities: Array.isArray(cloudData.activities) ? cloudData.activities : [],
-              users: Array.isArray(cloudData.users) ? cloudData.users : [],
-              skippedTests: Array.isArray(cloudData.skippedTests) ? cloudData.skippedTests : [],
-              crmVisits: Array.isArray(cloudData.crmVisits) ? cloudData.crmVisits : [],
-              mixGrades: Array.isArray(cloudData.mixGrades) ? cloudData.mixGrades : [],
-              currentUser: null
-            };
-            loadedFromCloud = true;
-            // Primary cloud state synced into localStorage for offline cache
-            localStorage.setItem(LS_KEY, JSON.stringify(window.state));
-            console.log("☁️ Primary Cloud Firestore state loaded & synced across browsers.");
-          }
-        }
-      }
-    } catch (err) {
-      console.warn("⚠️ Firestore loadState error, falling back to Local Storage:", err);
-    }
+    // 1. Attempt to fetch from Firebase Cloud Firestore first
+    let loadedFromCloud = await this.loadFromFirebase();
 
+    // 2. If Cloud read failed or offline, fallback to LocalStorage
     if (!loadedFromCloud) {
       const raw = localStorage.getItem(LS_KEY);
       if (raw) {
@@ -160,7 +173,7 @@ export class DatabaseManager {
     });
     window.nextTrackingSeq = maxSeq + 1;
 
-    await this.saveState(window.state);
+    // STRICT RULE: DO NOT call saveState() here on page load!
     return window.state;
   }
 
@@ -211,26 +224,23 @@ export class DatabaseManager {
             `Restored database backup (${window.state.master.length} castings, ${window.state.tests.length} tests, ${window.state.crmVisits.length} CRM inquiries)`
           );
 
-          // 1. Save to Local Storage & Main Document
+          // User explicitly triggered restore — save to Cloud Firestore & LocalStorage
           await this.saveState(window.state);
 
-          // 2. Batch Sync to Cloud Firestore Collections
+          // Batch Sync to Cloud Firestore Individual Collections
           if (this.isFirebaseActive()) {
             const batch = this.db.batch();
             
-            // Sync Master Casting Records
             for (const m of window.state.master) {
               const ref = this.db.collection("casting_records").doc(m.trackingNumber);
               batch.set(ref, JSON.parse(JSON.stringify(m)));
             }
 
-            // Sync Cube Test Results
             for (const t of window.state.tests) {
               const ref = this.db.collection("cube_tests").doc(t.testId);
               batch.set(ref, JSON.parse(JSON.stringify(t)));
             }
 
-            // Sync CRM Site Visits
             for (const v of window.state.crmVisits) {
               const ref = this.db.collection("crm_site_visits").doc(v.visitId || `CRM-${Date.now()}`);
               batch.set(ref, JSON.parse(JSON.stringify(v)));
@@ -240,7 +250,7 @@ export class DatabaseManager {
             console.log("🔥 Master DB JSON batch write successfully committed to Cloud Firestore.");
           }
 
-          // 3. Trigger UI updates
+          // Trigger UI updates
           if (typeof window.updateSuggestions === 'function') window.updateSuggestions();
           if (typeof window.renderTestingSidebarList === 'function') window.renderTestingSidebarList();
           if (typeof window.renderMaster === 'function') window.renderMaster();
@@ -263,9 +273,6 @@ export class DatabaseManager {
     });
   }
 
-  /**
-   * Exports Master Database state as a downloadable JSON file.
-   */
   exportMasterDB() {
     try {
       const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(window.state, null, 2));

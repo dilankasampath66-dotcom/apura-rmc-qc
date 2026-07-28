@@ -1594,7 +1594,6 @@ function populateSampleDataIfEmpty(){
   ];
 
   nextTrackingSeq = 4;
-  saveState();
 }
 
 /* ---------------------- PERSISTENCE ---------------------- */
@@ -1685,7 +1684,7 @@ async function loadState(){
     }
   }
 
-  await saveState();
+  // STRICT RULE: DO NOT call saveState() here on page load!
   updateSuggestions();
 
   currentUser = null;
