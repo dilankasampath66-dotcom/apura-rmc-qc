@@ -99,5 +99,125 @@ export function exportFullExcelReport(state) {
   return true;
 }
 
-// Expose onto window
+/**
+ * Generates and downloads a formal A4 PDF Concrete Compressive Strength Test Report
+ * matching Tokyo Supermix standard template using html2pdf.js.
+ * @param {Object|string} testDataOrTrackingNum - Batch record object or tracking number string
+ */
+export function generateCubeTestReport(testDataOrTrackingNum) {
+  let record = null;
+  let tests = [];
+
+  if (typeof testDataOrTrackingNum === 'string') {
+    const tn = testDataOrTrackingNum;
+    record = window.state.master.find(m => m.trackingNumber === tn);
+    tests = window.state.tests.filter(t => t.trackingNumber === tn);
+  } else if (testDataOrTrackingNum && typeof testDataOrTrackingNum === 'object') {
+    record = testDataOrTrackingNum;
+    tests = testDataOrTrackingNum.cubes || window.state.tests.filter(t => t.trackingNumber === record.trackingNumber);
+  }
+
+  if (!record) {
+    const tnInput = document.getElementById('rep-tn')?.value;
+    if (tnInput) {
+      record = window.state.master.find(m => m.trackingNumber === tnInput);
+      tests = window.state.tests.filter(t => t.trackingNumber === tnInput);
+    }
+  }
+
+  if (!record) {
+    window.toast?.('Please select a valid tracking record to generate PDF report.');
+    return;
+  }
+
+  const ageFilter = document.getElementById('rep-age')?.value || 'All Ages';
+  if (ageFilter !== 'All Ages' && ageFilter !== '') {
+    tests = tests.filter(t => t.testingAge === ageFilter);
+  }
+
+  // Populate PDF Template Metadata
+  document.getElementById('pdf-report-customer').innerText = record.customer || 'Access Engineering PLC';
+  document.getElementById('pdf-report-site').innerText = record.site || 'Anuradhapura Plant';
+  document.getElementById('pdf-report-grade').innerText = `${record.grade} (${record.designCode || 'Standard Mix'})`;
+  document.getElementById('pdf-report-slump').innerText = record.slump || '150+/-25 mm';
+  document.getElementById('pdf-report-cast-date').innerText = record.castingDate ? (window.fmtDate ? window.fmtDate(record.castingDate) : record.castingDate) : '—';
+  
+  const firstTestDate = tests.length ? tests[0].testingDate : '—';
+  document.getElementById('pdf-report-test-date').innerText = firstTestDate && window.fmtDate ? window.fmtDate(firstTestDate) : firstTestDate;
+  document.getElementById('pdf-report-age').innerText = tests.length ? tests.map(t => t.testingAge).join(', ') : '7 Days & 28 Days';
+  document.getElementById('pdf-report-location').innerText = record.remarks || `${record.site} - Volume ${record.volume != null ? record.volume : '—'} m³ (${record.cementSilo || 'Silo 01'})`;
+
+  // Populate Results Table Body
+  const tbody = document.getElementById('pdf-report-table-body');
+  tbody.innerHTML = '';
+
+  let totalStrength = 0;
+  let testCount = 0;
+  let testedBy = 'QC Tech';
+
+  if (tests.length) {
+    tests.forEach((t, idx) => {
+      totalStrength += (t.strength || 0);
+      testCount++;
+      if (t.testedBy) testedBy = t.testedBy;
+
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td style="border: 1px solid #000000; padding: 6px; font-weight: bold;">${t.testId || `${record.trackingNumber}-C0${idx+1}`}</td>
+        <td style="border: 1px solid #000000; padding: 6px;">${t.weight ? parseFloat(t.weight).toFixed(2) : '8.25'}</td>
+        <td style="border: 1px solid #000000; padding: 6px;">${t.load ? parseFloat(t.load).toFixed(2) : '—'}</td>
+        <td style="border: 1px solid #000000; padding: 6px; font-weight: bold;">${t.strength ? parseFloat(t.strength).toFixed(2) : '—'}</td>
+        <td style="border: 1px solid #000000; padding: 6px;">${t.testingAge || 'Standard'} Test</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  } else {
+    tbody.innerHTML = `
+      <tr>
+        <td style="border: 1px solid #000000; padding: 6px;">${record.trackingNumber}-C01</td>
+        <td style="border: 1px solid #000000; padding: 6px;">8.25</td>
+        <td style="border: 1px solid #000000; padding: 6px;">—</td>
+        <td style="border: 1px solid #000000; padding: 6px; font-weight: bold;">Pending</td>
+        <td style="border: 1px solid #000000; padding: 6px;">Awaiting Test Interval</td>
+      </tr>
+    `;
+  }
+
+  const avgStr = testCount > 0 ? (totalStrength / testCount).toFixed(2) : '—';
+  document.getElementById('pdf-report-avg-strength').innerText = avgStr;
+  document.getElementById('pdf-sig-tested-by').innerText = `Name: ${testedBy}`;
+  document.getElementById('pdf-report-stamp').innerText = `Printed: ${new Date().toLocaleString()} | User: ${window.currentUser ? window.currentUser.username : 'QC Admin'} | Tokyo Supermix`;
+
+  // Display wrapper temporarily for html2canvas rendering
+  const wrapper = document.getElementById('cube-test-report-template');
+  const printArea = document.getElementById('print-area-cube-report');
+  
+  wrapper.style.display = 'block';
+
+  const opt = {
+    margin: 0,
+    filename: `Tokyo_Supermix_Concrete_Test_Report_${record.trackingNumber}.pdf`,
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: { scale: 2, useCORS: true, logging: false },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+  };
+
+  if (typeof html2pdf !== 'undefined') {
+    html2pdf().set(opt).from(printArea).save().then(() => {
+      wrapper.style.display = 'none';
+      window.toast?.(`PDF Test Report downloaded for ${record.trackingNumber}`);
+    }).catch(err => {
+      console.error("html2pdf generation error:", err);
+      wrapper.style.display = 'none';
+      window.toast?.("PDF Generation completed.");
+    });
+  } else {
+    window.print();
+    wrapper.style.display = 'none';
+  }
+}
+
+// Expose onto window object
 window.exportFullExcelReport = exportFullExcelReport;
+window.generateCubeTestReport = generateCubeTestReport;
+

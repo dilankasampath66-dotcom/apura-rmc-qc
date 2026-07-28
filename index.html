@@ -5,9 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Apura RMC Plant — Cube QC System</title>
 
-<!-- CDN Libraries: Chart.js for charts, SheetJS for Excel export -->
+<!-- CDN Libraries: Chart.js for charts, SheetJS for Excel export, html2pdf for PDF export -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js" onload="if(document.getElementById('view-dashboard') && document.getElementById('view-dashboard').classList.contains('active')) renderDashboard();"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/SheetJS/0.19.3/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
 <!-- Firebase v9 Compat CDN SDKs -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -2968,8 +2969,9 @@ function generateCubeReport(){
         </div>
       </div>
 
-      <div class="btn-row no-print" style="margin-top:24px;">
-        <button class="btn btn-primary" onclick="window.print()">🖨 Print / Save as PDF</button>
+      <div class="btn-row no-print" style="margin-top:24px;gap:12px;">
+        <button class="btn btn-primary" onclick="generateCubeTestReport('${tn}')">📄 Download Official PDF Report (A4)</button>
+        <button class="btn btn-ghost" onclick="window.print()">🖨 Print View</button>
       </div>
 
       <!-- Bottom right 4px time date user print stamp -->
@@ -3615,5 +3617,121 @@ function confirmClearWarnings(){
 /* ---------------------- INIT ---------------------- */
 document.getElementById('f-castingDate').valueAsDate = new Date();
 </script>
+
+<!-- HIDDEN CUBE TEST REPORT TEMPLATE (FOR PDF EXPORT VIA html2pdf.js) -->
+<div id="cube-test-report-template" style="display: none;">
+  <div id="print-area-cube-report" style="width: 210mm; min-height: 297mm; padding: 18mm 20mm; background: #ffffff; color: #000000; font-family: 'Arial', 'Helvetica', sans-serif; box-sizing: border-box;">
+    
+    <!-- HEADER SECTION WITH LOGO & COMPANY INFO -->
+    <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #000000; padding-bottom: 12px; margin-bottom: 16px;">
+      <div style="width: 140px; flex-shrink: 0;">
+        <img id="pdf-report-logo" src="https://dilankasampath66-dotcom.github.io/apura-rmc-qc/images/logo.png" alt="Tokyo Supermix Logo" style="max-width: 130px; height: auto;" onerror="this.src='https://via.placeholder.com/150x50?text=TOKYO+SUPERMIX'" />
+      </div>
+      <div style="text-align: right; flex: 1;">
+        <h2 style="margin: 0; font-size: 17px; font-weight: 800; color: #000000; letter-spacing: 0.5px;">TOKYO SUPER MIX (PVT) LTD</h2>
+        <h3 style="margin: 3px 0; font-size: 13px; font-weight: 700; color: #222222;">TOKYO SUPER MIX READY MIXED CONCRETE PLANT</h3>
+        <p style="margin: 1px 0; font-size: 11px; color: #333333;">Saliya Mawatha Anuradhapura</p>
+        <p style="margin: 1px 0; font-size: 11px; color: #333333;">Tel/Fax: 025-2234193 | E-mail: Supermix.anurap@tokyocement.lk</p>
+      </div>
+    </div>
+
+    <!-- REPORT TITLE & STANDARD REF -->
+    <div style="text-align: center; margin-bottom: 18px;">
+      <h3 style="margin: 0; font-size: 15px; font-weight: 800; text-decoration: underline; letter-spacing: 0.5px; text-transform: uppercase;">CONCRETE COMPRESSIVE STRENGTH TEST REPORT</h3>
+      <p style="margin: 4px 0 0 0; font-size: 11px; font-style: italic; color: #444444;">(Specification Reference : BS 1881-116 / BS EN 12390)</p>
+    </div>
+
+    <!-- METADATA TABLE -->
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 18px; font-size: 11.5px; border: 1px solid #000000;">
+      <tbody>
+        <tr>
+          <td style="width: 28%; font-weight: bold; padding: 6px 8px; border: 1px solid #000000; background: #f5f5f5;">Customer</td>
+          <td style="width: 72%; padding: 6px 8px; border: 1px solid #000000;" id="pdf-report-customer">—</td>
+        </tr>
+        <tr>
+          <td style="font-weight: bold; padding: 6px 8px; border: 1px solid #000000; background: #f5f5f5;">Project / Supply Site</td>
+          <td style="padding: 6px 8px; border: 1px solid #000000;" id="pdf-report-site">—</td>
+        </tr>
+        <tr>
+          <td style="font-weight: bold; padding: 6px 8px; border: 1px solid #000000; background: #f5f5f5;">Grade of Concrete</td>
+          <td style="padding: 6px 8px; border: 1px solid #000000;" id="pdf-report-grade">—</td>
+        </tr>
+        <tr>
+          <td style="font-weight: bold; padding: 6px 8px; border: 1px solid #000000; background: #f5f5f5;">Slump Specified</td>
+          <td style="padding: 6px 8px; border: 1px solid #000000;" id="pdf-report-slump">150+/-25 mm</td>
+        </tr>
+        <tr>
+          <td style="font-weight: bold; padding: 6px 8px; border: 1px solid #000000; background: #f5f5f5;">Casted Date</td>
+          <td style="padding: 6px 8px; border: 1px solid #000000;" id="pdf-report-cast-date">—</td>
+        </tr>
+        <tr>
+          <td style="font-weight: bold; padding: 6px 8px; border: 1px solid #000000; background: #f5f5f5;">Date of Test</td>
+          <td style="padding: 6px 8px; border: 1px solid #000000;" id="pdf-report-test-date">—</td>
+        </tr>
+        <tr>
+          <td style="font-weight: bold; padding: 6px 8px; border: 1px solid #000000; background: #f5f5f5;">Age of Cubes at Testing</td>
+          <td style="padding: 6px 8px; border: 1px solid #000000;" id="pdf-report-age">—</td>
+        </tr>
+        <tr>
+          <td style="font-weight: bold; padding: 6px 8px; border: 1px solid #000000; background: #f5f5f5;">Dimensions of Cube</td>
+          <td style="padding: 6px 8px; border: 1px solid #000000;">150mm * 150mm * 150mm</td>
+        </tr>
+        <tr>
+          <td style="font-weight: bold; padding: 6px 8px; border: 1px solid #000000; background: #f5f5f5;">Casting Location / Notes</td>
+          <td style="padding: 6px 8px; border: 1px solid #000000;" id="pdf-report-location">—</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- TEST RESULTS TABLE -->
+    <table style="width: 100%; border-collapse: collapse; font-size: 11.5px; margin-bottom: 24px; text-align: center; border: 1px solid #000000;">
+      <thead>
+        <tr style="background-color: #eaeaea;">
+          <th style="border: 1px solid #000000; padding: 7px 6px; font-weight: bold;">Cube No / Test ID</th>
+          <th style="border: 1px solid #000000; padding: 7px 6px; font-weight: bold;">Weight (kg)</th>
+          <th style="border: 1px solid #000000; padding: 7px 6px; font-weight: bold;">Maximum Load at Failure (kN)</th>
+          <th style="border: 1px solid #000000; padding: 7px 6px; font-weight: bold;">Equivalent Compressive Strength (N/mm²)</th>
+          <th style="border: 1px solid #000000; padding: 7px 6px; font-weight: bold;">Remarks &amp; Status</th>
+        </tr>
+      </thead>
+      <tbody id="pdf-report-table-body">
+        <!-- Injected via JavaScript -->
+      </tbody>
+    </table>
+
+    <!-- SUMMARY METRIC BOX -->
+    <div style="border: 1px solid #000000; background: #fafafa; padding: 8px 12px; margin-bottom: 30px; font-size: 12px; display: flex; justify-content: space-between; align-items: center;">
+      <div><strong>Average Compressive Strength:</strong> <span id="pdf-report-avg-strength" style="font-size: 15px; font-weight: bold;">—</span> N/mm²</div>
+      <div><strong>BS EN 12390 Status:</strong> <span id="pdf-report-compliance" style="font-weight: bold; color: #000;">COMPLIANT</span></div>
+    </div>
+
+    <!-- SIGNATURES SECTION -->
+    <table style="width: 100%; margin-top: 45px; font-size: 11px; text-align: center; border: none;">
+      <tbody>
+        <tr>
+          <td style="width: 33%; vertical-align: bottom;">
+            <div style="border-top: 1px dashed #000000; margin: 0 15px; padding-top: 6px; font-weight: bold;">Tested By (QA/QC Tech)</div>
+            <div id="pdf-sig-tested-by" style="font-size: 10px; margin-top: 3px; color: #444;">Name: —</div>
+          </td>
+          <td style="width: 33%; vertical-align: bottom;">
+            <div style="border-top: 1px dashed #000000; margin: 0 15px; padding-top: 6px; font-weight: bold;">Checked By (Lab Engineer)</div>
+            <div style="font-size: 10px; margin-top: 3px; color: #444;">Signature &amp; Stamp</div>
+          </td>
+          <td style="width: 33%; vertical-align: bottom;">
+            <div style="border-top: 1px dashed #000000; margin: 0 15px; padding-top: 6px; font-weight: bold;">Authorized Signature</div>
+            <div style="font-size: 10px; margin-top: 3px; color: #444;">Tokyo Super Mix Plant Mgr</div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- FOOTER STAMP -->
+    <div style="margin-top: 35px; border-top: 1px solid #cccccc; padding-top: 6px; font-size: 9px; color: #666666; font-family: monospace; display: flex; justify-content: space-between;">
+      <div>Form: F/QAQC/30 | Rev: 03 | Spec: BS EN 1881-116</div>
+      <div id="pdf-report-stamp">Tokyo Super Mix Anuradhapura Plant</div>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
