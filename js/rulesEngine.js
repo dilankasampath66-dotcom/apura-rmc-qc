@@ -38,11 +38,13 @@ export function validateStageTransition(currentStage, targetStage) {
 
 /**
  * Computes scheduled testing dates based on casting date and active required test intervals.
+ * Incorporates evaluateTestingStatus hierarchy to suppress obsolete pending/overdue alerts.
  * @param {string} castingDateStr - ISO date string (YYYY-MM-DD)
  * @param {Array<string>} activeAges - Active test ages (['3 Days', '7 Days', '14 Days', '28 Days'])
+ * @param {Object} [record] - Optional casting record object (with strength values) to evaluate skip/completed states
  * @returns {Array<Object>} Scheduled test dates
  */
-export function computeTestingSchedule(castingDateStr, activeAges = ['3 Days', '7 Days', '14 Days', '28 Days']) {
+export function computeTestingSchedule(castingDateStr, activeAges = ['3 Days', '7 Days', '14 Days', '28 Days'], record = null) {
   if (!castingDateStr) return [];
   const castDate = new Date(castingDateStr);
   
@@ -53,6 +55,8 @@ export function computeTestingSchedule(castingDateStr, activeAges = ['3 Days', '
     { label: '28 Days', days: 28 }
   ];
 
+  const evalResult = record ? evaluateTestingStatus(record) : { skipEarlyTests: false, is28DayPending: true, overallStatus: 'Pending' };
+
   return intervals
     .filter(item => activeAges.includes(item.label))
     .map(item => {
@@ -62,9 +66,21 @@ export function computeTestingSchedule(castingDateStr, activeAges = ['3 Days', '
       
       const today = new Date().toISOString().slice(0, 10);
       let status = 'Pending';
-      if (isoDueDate < today) status = 'Overdue';
-      else if (isoDueDate === today) status = 'Due Today';
-      else status = 'Upcoming';
+
+      const key = `strength${item.days}D`;
+      const isAgeCompleted = record && Number(record[key]) > 0;
+
+      if (isAgeCompleted) {
+        status = 'Completed';
+      } else if (evalResult.skipEarlyTests && item.label !== '28 Days') {
+        status = 'Skipped';
+      } else if (isoDueDate < today) {
+        status = 'Overdue';
+      } else if (isoDueDate === today) {
+        status = 'Due Today';
+      } else {
+        status = 'Upcoming';
+      }
 
       return {
         age: item.label,

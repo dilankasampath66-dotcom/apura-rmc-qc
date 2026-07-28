@@ -1002,7 +1002,7 @@ td.mono{ font-family: var(--font-mono); font-size:13px; }
           <input type="text" id="sched-filter" placeholder="Filter by Tracking Number, Site, or Grade…" oninput="renderSchedule()">
           <select id="sched-status-filter" onchange="renderSchedule()" style="max-width:200px;">
             <option value="">All Statuses</option>
-            <option>Completed</option><option>Overdue</option><option>Due Today</option><option>Future</option>
+            <option>Completed</option><option>Overdue</option><option>Due Today</option><option>Future</option><option>Skipped</option>
           </select>
         </div>
         <div class="table-wrap"><table id="schedule-table"><thead></thead><tbody></tbody></table></div>
@@ -2095,9 +2095,29 @@ function buildSchedule(){
   const today = new Date(); today.setHours(0,0,0,0);
   const todayStr = today.toISOString().slice(0,10);
 
+  const getStrengthForAge = (tn, ageLabel) => {
+    const matching = state.tests.filter(t => t.trackingNumber === tn && t.testingAge === ageLabel);
+    if (!matching.length) return null;
+    const valid = matching.map(t => Number(t.strength)).filter(s => !isNaN(s) && s > 0);
+    return valid.length ? (valid.reduce((a, b) => a + b, 0) / valid.length) : null;
+  };
+
   state.master.forEach(m=>{
     const activeAges = (m.activeAges && m.activeAges.length) ? m.activeAges : ['3 Days', '7 Days', '14 Days', '28 Days'];
     const activeAgeObjects = STANDARD_AGES.filter(a => activeAges.includes(a.label));
+
+    const s3 = getStrengthForAge(m.trackingNumber, '3 Days');
+    const s7 = getStrengthForAge(m.trackingNumber, '7 Days');
+    const s14 = getStrengthForAge(m.trackingNumber, '14 Days');
+    const s28 = getStrengthForAge(m.trackingNumber, '28 Days');
+
+    const evalResult = (typeof evaluateTestingStatus === 'function') ? evaluateTestingStatus({
+      grade: m.grade,
+      strength3D: s3,
+      strength7D: s7,
+      strength14D: s14,
+      strength28D: s28
+    }) : { skipEarlyTests: false, is28DayPending: true, overallStatus: 'Pending' };
 
     activeAgeObjects.forEach(age=>{
       const due = addDays(m.castingDate, age.days);
@@ -2108,6 +2128,7 @@ function buildSchedule(){
       let status;
       if(completedTest){ status='Completed'; }
       else if(skippedTest){ status='Skipped'; }
+      else if(evalResult.skipEarlyTests && age.label !== '28 Days'){ status='Skipped'; }
       else if(dueStr < todayStr){ status='Overdue'; }
       else if(dueStr === todayStr){ status='Due Today'; }
       else{ status='Future'; }
@@ -2127,22 +2148,41 @@ function buildSchedule(){
 function computeDerived(m){
   const tests = testsFor(m.trackingNumber);
   const testsCompleted = tests.length;
-  const standardCompleted = tests.filter(t=>STANDARD_AGES.some(a=>a.label===t.testingAge)).length;
-  const cappedStandard = Math.min(4, m.numCubes);
 
-  let status;
-  if(testsCompleted===0) status='Open';
-  else if(standardCompleted >= cappedStandard) status='Completed';
-  else status='Partially Tested';
+  const getStrengthForAge = (ageLabel) => {
+    const matching = tests.filter(t => t.testingAge === ageLabel);
+    if (!matching.length) return null;
+    const valid = matching.map(t => Number(t.strength)).filter(s => !isNaN(s) && s > 0);
+    return valid.length ? (valid.reduce((a, b) => a + b, 0) / valid.length) : null;
+  };
 
-  const mature = tests.filter(t=>t.testingAge==='28 Days');
-  let avgStrength = null, passFail = 'Pending';
-  if(mature.length){
-    avgStrength = mature.reduce((s,t)=>s+t.strength,0)/mature.length;
+  const s3 = getStrengthForAge('3 Days');
+  const s7 = getStrengthForAge('7 Days');
+  const s14 = getStrengthForAge('14 Days');
+  const s28 = getStrengthForAge('28 Days');
+
+  const evalResult = (typeof evaluateTestingStatus === 'function') ? evaluateTestingStatus({
+    grade: m.grade,
+    strength3D: s3,
+    strength7D: s7,
+    strength14D: s14,
+    strength28D: s28
+  }) : { overallStatus: 'Pending', skipEarlyTests: false, is28DayPending: true };
+
+  let status = evalResult.overallStatus;
+  if(testsCompleted === 0) status = 'Open';
+
+  let avgStrength = s28;
+  let passFail = 'Pending';
+
+  if (s28 !== null) {
     const target = gradeTarget(m.grade);
-    passFail = (target!=null && avgStrength >= target) ? 'Pass' : 'Fail';
+    passFail = (target != null && s28 >= target) ? 'Pass' : 'Fail';
+  } else if (evalResult.overallStatus === 'Target Achieved - Awaiting 28D') {
+    passFail = 'Pass (Early Target Achieved)';
   }
-  return {status, testsCompleted, avgStrength, passFail};
+
+  return { status, testsCompleted, avgStrength, passFail, is28DayPending: evalResult.is28DayPending };
 }
 
 /* ---------------------- NAVIGATION & LAYOUT ---------------------- */
@@ -2804,7 +2844,7 @@ function renderHome(){
   const overdue = sched.filter(s=>s.status==='Overdue').length;
   const dueToday = sched.filter(s=>s.status==='Due Today').length;
   const totalCubes = state.master.reduce((s,m)=>s+m.numCubes,0);
-  const pending = sched.filter(s=>s.status!=='Completed').length;
+  const pending = sched.filter(s=>s.status!=='Completed' && s.status!=='Skipped').length;
 
   const kpis = [
     {label:'Total Cubes', value:totalCubes},
@@ -2824,7 +2864,7 @@ function renderHome(){
     <tbody>${recent.map(m=>`<tr><td><a href="#" onclick="jumpToRecall('${m.trackingNumber}'); return false;" class="tn-link">${m.trackingNumber}</a></td><td>${escapeHtml(m.site)}</td><td>${escapeHtml(m.grade)}</td><td>${fmtDate(m.castingDate)}</td></tr>`).join('')}</tbody></table>
   ` : `<div class="empty-state"><div class="ic">&#9744;</div>No castings recorded yet.</div>`;
 
-  const dueSoon = sched.filter(s=>s.status!=='Completed' && s.daysRemaining<=7 && s.daysRemaining>=-90)
+  const dueSoon = sched.filter(s=>s.status!=='Completed' && s.status!=='Skipped' && s.daysRemaining<=7 && s.daysRemaining>=-90)
                         .sort((a,b)=>a.daysRemaining-b.daysRemaining);
   document.getElementById('home-due').innerHTML = dueSoon.length ? `
     <table><thead><tr><th>Tracking No.</th><th>Age</th><th>Due Date</th><th>Status</th></tr></thead>
@@ -2834,7 +2874,8 @@ function renderHome(){
 
 function statusBadge(status){
   const map = {
-    Completed:'green', Overdue:'red', 'Due Today':'amber', Future:'blue', Open:'grey', 'Partially Tested':'amber', Pass:'green', Fail:'red', Pending:'grey',
+    Completed:'green', Overdue:'red', 'Due Today':'amber', Future:'blue', Open:'grey', 'Partially Tested':'amber', Pass:'green', Fail:'red', Pending:'grey', Skipped:'grey',
+    'Target Achieved - Awaiting 28D':'blue', 'Pass (Early Target Achieved)':'green',
     'New Entry':'blue', 'Test Recorded':'green', 'Record Updated':'amber', 'Record Deleted':'red', 'User Login':'purple', 'User Logout':'grey', 'User Created':'purple', 'User Updated':'amber', 'User Deleted':'red', 'Excel Export':'purple', 'Backup Download':'purple', 'Backup Restore':'blue', 'Data Reset':'red'
   };
   return `<span class="badge badge-${map[status]||'grey'}">${status}</span>`;
@@ -2856,7 +2897,7 @@ function renderSchedule(){
       <td><a href="#" onclick="jumpToRecall('${r.trackingNumber}'); return false;" class="tn-link">${r.trackingNumber}</a></td><td>${fmtDate(r.castingDate)}</td><td>${fmtDate(r.dueDate)}</td>
       <td>${r.age}</td><td>${r.site}</td><td>${r.grade}</td><td>${r.designCode}</td>
       <td>${r.technician||'—'}</td><td>${statusBadge(r.status)}</td>
-      <td>${r.status !== 'Completed' ? `<button class="btn btn-sm btn-primary" onclick="jumpToTesting('${r.trackingNumber}')">Record Test</button>` : '—'}</td>
+      <td>${(r.status !== 'Completed' && r.status !== 'Skipped') ? `<button class="btn btn-sm btn-primary" onclick="jumpToTesting('${r.trackingNumber}')">Record Test</button>` : '—'}</td>
     </tr>`).join('') : `<tr><td colspan="10"><div class="empty-state">No schedule items match your search.</div></td></tr>`;
 }
 
@@ -2899,32 +2940,14 @@ function renderDashboard(){
 
 function renderDashboardKPIs(filteredMaster, filteredTests) {
 
-  // Data is now passed in as parameters
-
-  // Schedule status calculation for filtered set
-  const sched = [];
-  const today = new Date(); today.setHours(0,0,0,0);
-  const todayStr = today.toISOString().slice(0,10);
-
-  filteredMaster.forEach(m=>{
-    STANDARD_AGES.forEach(age=>{
-      const due = addDays(m.castingDate, age.days);
-      const dueStr = due.toISOString().slice(0,10);
-      const completedTest = filteredTests.find(t=>t.trackingNumber===m.trackingNumber && t.testingAge===age.label);
-
-      let status;
-      if(completedTest){ status='Completed'; }
-      else if(dueStr < todayStr){ status='Overdue'; }
-      else if(dueStr === todayStr){ status='Due Today'; }
-      else{ status='Future'; }
-
-      sched.push({ status });
-    });
-  });
+  // Schedule status calculation for filtered set using unified buildSchedule & evaluateTestingStatus hierarchy
+  const filteredTNs = new Set(filteredMaster.map(m => m.trackingNumber));
+  const fullSched = buildSchedule();
+  const sched = fullSched.filter(s => filteredTNs.has(s.trackingNumber));
 
   const overdue = sched.filter(s=>s.status==='Overdue').length;
   const dueToday = sched.filter(s=>s.status==='Due Today').length;
-  const pending = sched.filter(s=>s.status!=='Completed').length;
+  const pending = sched.filter(s=>s.status!=='Completed' && s.status!=='Skipped').length;
 
   const withDerived = filteredMaster.map(m=>({m, d:computeDerived(m)}));
   const matureRows = withDerived.filter(x=>x.d.avgStrength!=null);
