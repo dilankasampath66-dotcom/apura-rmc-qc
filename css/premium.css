@@ -1,12 +1,24 @@
 /* =========================================================================
-   PREMIUM "NANO" GLOBAL AESTHETIC & SCROLL REVEAL
+   PREMIUM "NANO" GLOBAL AESTHETIC - INDIGO BLUE PALETTE
    ========================================================================= */
 
 :root {
+    /* 1. Palette */
+    --indigo-dark: #293681;
+    --blue-med: #4274D9;
+    --sky-light: #95CCDD;
+    --pale-aqua: #D0E7E6;
+    
+    /* 2. Gradients */
+    --linear-blend: linear-gradient(135deg, #D0E7E6 0%, #95CCDD 100%);
+    --radial-depth: radial-gradient(circle, #293681 0%, #4274D9 50%, #95CCDD 100%);
+    
+    /* 3. Visuals */
+    --text-slate: #334155;
+    
     /* Background & Overlay */
     --body-bg-image: url('https://images.unsplash.com/photo-1518640467707-6811f4a6ab73?q=80&w=2000&auto=format&fit=crop');
-    --bg-overlay-color: rgba(245, 247, 250, 0.95);
-
+    
     /* Container Styles */
     --premium-bg: #ffffff;
     --premium-radius: 12px;
@@ -18,19 +30,40 @@
     --reveal-duration: 0.8s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* --- 1. THE GLOBAL BACKGROUND (Body Styling) --- */
+/* --- THE GLOBAL BACKGROUND (Body Styling) --- */
+/* Smooth architectural concrete texture overlaid with a high-opacity (92%+) linear-gradient wash */
 body {
     background-image: 
-        linear-gradient(var(--bg-overlay-color), var(--bg-overlay-color)),
+        linear-gradient(135deg, rgba(208, 231, 230, 0.92) 0%, rgba(149, 204, 221, 0.92) 100%),
         var(--body-bg-image);
     background-size: cover;
     background-position: center;
     background-attachment: fixed;
     background-repeat: no-repeat;
+    color: var(--text-slate);
+    font-family: 'Inter', sans-serif;
 }
 
-/* --- 2. DASHBOARD CONTAINERS (Foreground Readability) --- */
-/* Target all primary containers. Add your specific container classes here if needed */
+/* --- PREMIUM HEADER BAND --- */
+/* Stacked horizontal band sequence to the top of the main dashboard container */
+body::before {
+    content: "";
+    display: block;
+    height: 6px;
+    width: 100%;
+    background: linear-gradient(to right, 
+        var(--indigo-dark) 0%, var(--indigo-dark) 25%,
+        var(--blue-med) 25%, var(--blue-med) 50%,
+        var(--sky-light) 50%, var(--sky-light) 75%,
+        var(--pale-aqua) 75%, var(--pale-aqua) 100%
+    );
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 9999;
+}
+
+/* --- DASHBOARD CONTAINERS (Foreground Readability) --- */
 .card,
 .panel,
 .dashboard-container,
@@ -42,40 +75,81 @@ body {
     border-radius: var(--premium-radius) !important;
     box-shadow: var(--premium-shadow) !important;
     border: 1px solid rgba(226, 232, 240, 0.6) !important;
-    
-    /* Prepare for micro-interactions */
     transition: var(--transition-smooth);
 }
 
-/* --- 3. MICRO-INTERACTIONS (Hover Effects) --- */
-/* Subtle lift and deeper shadow on hover */
+/* --- MICRO-INTERACTIONS (Hover Effects) --- */
+/* Refined, calculated lift effect with slightly deeper shadow */
 .card:hover,
 .panel:hover,
 .glass-card:hover,
 .dashboard-container:hover,
 .white-box:hover,
 tbody tr:hover {
-    transform: translateY(-4px);
+    transform: translateY(-5px);
     box-shadow: var(--premium-shadow-hover) !important;
     z-index: 10;
 }
-
-/* Smooth transition for table rows specifically */
 tbody tr {
     transition: var(--transition-smooth);
 }
 
-/* --- 4. THE "EXPENSIVE" MOTION (Scroll Reveal Transitions) --- */
-/* Pre-state: elements are slightly shifted down and invisible */
+/* --- GRADIENT TYPOGRAPHY --- */
+/* Applies to major titles or H1 elements */
+h1, .gradient-title, .brand .plant {
+    background: linear-gradient(to right, var(--indigo-dark), var(--blue-med));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    color: transparent; 
+}
+
+/* --- GRADIENT BUTTONS --- */
+.btn-premium,
+button.btn-primary,
+.update-report-btn {
+    background: linear-gradient(to right, var(--indigo-dark) 0%, var(--blue-med) 100%) !important;
+    color: #ffffff !important;
+    border: none !important;
+    transition: var(--transition-smooth);
+    box-shadow: 0 2px 8px rgba(41, 54, 129, 0.2);
+}
+.btn-premium:hover,
+button.btn-primary:hover,
+.update-report-btn:hover {
+    box-shadow: 0 4px 15px rgba(66, 116, 217, 0.4) !important;
+    transform: translateY(-2px);
+}
+
+/* --- ICON REFINEMENT (RADIAL DEPTH) --- */
+.icon-premium {
+    background: var(--radial-depth);
+    border-radius: 50%;
+    color: white;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    box-shadow: 0 2px 10px rgba(41, 54, 129, 0.3);
+    transition: var(--transition-smooth);
+}
+.icon-premium:hover {
+    transform: scale(1.05);
+    box-shadow: 0 4px 15px rgba(41, 54, 129, 0.5);
+}
+
+/* --- THE "EXPENSIVE" MOTION (Scroll Reveal Transitions) --- */
 .reveal-on-scroll {
     opacity: 0;
     transform: translateY(20px);
     transition: opacity var(--reveal-duration), transform var(--reveal-duration);
     will-change: opacity, transform;
 }
-
-/* Post-state: applied by the Intersection Observer JS */
 .reveal-on-scroll.is-revealed {
     opacity: 1;
     transform: translateY(0);
 }
+
+/* Ensure Charts maintain data readability and utilize new colors natively or via CSS */
+/* Note: For Chart.js, you'll need to pass var(--blue-med) and var(--sky-light) into your dataset configurations in JS. */
