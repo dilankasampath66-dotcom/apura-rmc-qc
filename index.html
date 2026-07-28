@@ -4235,6 +4235,7 @@ function renderChartWeather(filteredMaster, filteredTests) {
         }
       }
     });
+    }
   } catch (err) {
     console.error("Error rendering Chart 2 (Weather Impact):", err);
     showChartPlaceholder(canvasId, "Unable to render Weather Impact Chart: " + err.message);
@@ -4322,6 +4323,7 @@ function renderChartSlump(filteredMaster, filteredTests) {
         }
       }
     });
+    }
   } catch (err) {
     console.error("Error rendering Chart 3 (Slump Efficiency):", err);
     showChartPlaceholder(canvasId, "Unable to render Slump & Efficiency Chart: " + err.message);
@@ -4411,6 +4413,7 @@ function renderChartSiloPerformance(filteredMaster, filteredTests) {
         }
       }
     });
+    }
   } catch (err) {
     console.error("Error rendering Chart (Silo Performance):", err);
     showChartPlaceholder(canvasId, "Unable to render Silo/Bulk Performance Chart: " + err.message);
@@ -4554,6 +4557,7 @@ function renderChartSlumpSensitivity(filteredMaster, filteredTests) {
         }
       }
     });
+    }
   } catch (err) {
     console.error("Error rendering Chart (Slump Sensitivity):", err);
     showChartPlaceholder(canvasId, "Unable to render Slump Sensitivity Chart: " + err.message);
