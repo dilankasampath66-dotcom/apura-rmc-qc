@@ -1219,7 +1219,14 @@ td.mono{ font-family: var(--font-mono); font-size:13px; }
 <!-- FIREBASE SDK INITIALIZATION (CLOUD FIRESTORE INTEGRATION) -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-  import { initializeFirestore, enableIndexedDbPersistence, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+  import { 
+    initializeFirestore, 
+    persistentLocalCache, 
+    persistentMultipleTabManager, 
+    doc, 
+    setDoc, 
+    getDoc 
+  } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
   // Production Firebase Project Configuration for APURA RMC PLANT
   const firebaseConfig = {
@@ -1237,21 +1244,15 @@ td.mono{ font-family: var(--font-mono); font-size:13px; }
   try {
     if (firebaseConfig.apiKey) {
       const app = initializeApp(firebaseConfig);
-      // Enable Long Polling to prevent WebChannel RPC Write stream transport errors
+      // Modern v10 Persistent Local Cache & Long Polling
       db = initializeFirestore(app, {
-        experimentalForceLongPolling: true
+        experimentalForceLongPolling: true,
+        localCache: persistentLocalCache({
+          tabManager: persistentMultipleTabManager()
+        })
       });
       firebaseActive = true;
-      console.log("🔥 Firebase Cloud Firestore connected with Long Polling active (apura-rmc-qc).");
-
-      // Enable Offline IndexedDB Persistence
-      enableIndexedDbPersistence(db).catch((err) => {
-        if (err.code === 'failed-precondition') {
-          console.warn("⚠️ Firestore offline persistence enabled in primary tab.");
-        } else if (err.code === 'unimplemented') {
-          console.warn("⚠️ Current browser does not support IndexedDB persistence.");
-        }
-      });
+      console.log("🔥 Firebase Cloud Firestore connected with Modern Persistent Local Cache & Long Polling (apura-rmc-qc).");
     }
   } catch (err) {
     console.warn("⚠️ Firebase init failed, fallback to localStorage active:", err);
