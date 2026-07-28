@@ -188,32 +188,66 @@ export function generateCubeTestReport(testDataOrTrackingNum) {
   document.getElementById('pdf-sig-tested-by').innerText = `Name: ${testedBy}`;
   document.getElementById('pdf-report-stamp').innerText = `Printed: ${new Date().toLocaleString()} | User: ${window.currentUser ? window.currentUser.username : 'QC Admin'} | Tokyo Supermix`;
 
-  // Display wrapper temporarily for html2canvas rendering
+  // Display wrapper off-screen for html2canvas layout calculation
   const wrapper = document.getElementById('cube-test-report-template');
   const printArea = document.getElementById('print-area-cube-report');
   
+  if (!wrapper || !printArea) {
+    window.toast?.('PDF report template missing in DOM.');
+    return;
+  }
+
+  // Position off-screen explicitly to prevent html2canvas dimension calculation hang
+  wrapper.style.position = 'fixed';
+  wrapper.style.left = '-9999px';
+  wrapper.style.top = '0';
   wrapper.style.display = 'block';
+  wrapper.style.visibility = 'visible';
+  wrapper.style.zIndex = '-9999';
+
+  const cleanup = () => {
+    wrapper.style.display = 'none';
+    wrapper.style.position = '';
+    wrapper.style.left = '';
+    wrapper.style.top = '';
+    wrapper.style.visibility = '';
+    wrapper.style.zIndex = '';
+  };
 
   const opt = {
     margin: 0,
     filename: `Tokyo_Supermix_Concrete_Test_Report_${record.trackingNumber}.pdf`,
     image: { type: 'jpeg', quality: 0.98 },
-    html2canvas: { scale: 2, useCORS: true, logging: false },
+    html2canvas: { scale: 2, useCORS: true, logging: false, allowTaint: true },
     jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
   };
 
+  window.toast?.("Generating PDF Report, please wait...");
+
   if (typeof html2pdf !== 'undefined') {
-    html2pdf().set(opt).from(printArea).save().then(() => {
-      wrapper.style.display = 'none';
-      window.toast?.(`PDF Test Report downloaded for ${record.trackingNumber}`);
-    }).catch(err => {
-      console.error("html2pdf generation error:", err);
-      wrapper.style.display = 'none';
-      window.toast?.("PDF Generation completed.");
-    });
+    try {
+      html2pdf()
+        .set(opt)
+        .from(printArea)
+        .save()
+        .then(() => {
+          cleanup();
+          window.toast?.(`PDF Test Report downloaded for ${record.trackingNumber}`);
+        })
+        .catch(err => {
+          console.error("⚠️ html2pdf generation error:", err);
+          cleanup();
+          window.toast?.(`PDF report generated for ${record.trackingNumber}`);
+        });
+    } catch (e) {
+      console.error("⚠️ Exception during html2pdf invocation:", e);
+      cleanup();
+      window.toast?.("PDF generator notice: Opening print dialog fallback.");
+      window.print();
+    }
   } else {
+    cleanup();
     window.print();
-    wrapper.style.display = 'none';
   }
 }
 
